@@ -1,4 +1,5 @@
 # Webapp
 webapp/node_modules/*
+webapp/package-lock.json
 
 # Server
