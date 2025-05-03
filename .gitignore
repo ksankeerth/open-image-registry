@@ -1,5 +1,10 @@
 # Webapp
 webapp/node_modules/*
 webapp/package-lock.json
+webapp/build/
 
 # Server
+server/go.sum
+
+# other 
+bin/
