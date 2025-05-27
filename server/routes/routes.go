@@ -24,7 +24,7 @@ func InitRouter(webappBuildPath string) *chi.Mux {
 	})
 
 	router.Use(cors.Handler)
-	router.Use(httplog.RequestLogger(httplog.NewLogger("docker-registry", httplog.Options{
+	router.Use(httplog.RequestLogger(httplog.NewLogger("open-image-registry", httplog.Options{
 		LogLevel:         slog.LevelDebug,
 		Concise:          true,
 		RequestHeaders:   true,

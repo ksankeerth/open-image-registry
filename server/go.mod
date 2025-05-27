@@ -1,4 +1,4 @@
-module github.com/ksankeerth/docker-registry
+module github.com/ksankeerth/open-image-registry
 
 go 1.24.2
 

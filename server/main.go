@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/ksankeerth/docker-registry/routes"
+	"github.com/ksankeerth/open-image-registry/routes"
 )
 
 func main() {

@@ -7,5 +7,5 @@ build-ui:
 	cd webapp && npm run build
 
 run-server: build-server build-ui
-	cd bin && ./docker-registry --webapp-build-path=$(shell pwd)/webapp/build
+	cd bin && ./open-image-registry --webapp-build-path=$(shell pwd)/webapp/build
 	
