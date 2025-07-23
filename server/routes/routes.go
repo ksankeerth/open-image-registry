@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -10,9 +11,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/httplog/v2"
+	"github.com/ksankeerth/open-image-registry/db"
+	"github.com/ksankeerth/open-image-registry/handlers/api"
 )
 
-func InitRouter(webappBuildPath string) *chi.Mux {
+func InitRouter(webappBuildPath string, database *sql.DB) *chi.Mux {
 
 	router := chi.NewRouter()
 
@@ -31,8 +34,18 @@ func InitRouter(webappBuildPath string) *chi.Mux {
 		MessageFieldName: "message",
 	})))
 
+	upstreamRegDAO := db.NewUpstreamRegistryDAO(database)
+	upstreamRegistryHandler := api.NewUpstreamRegistryHandler(&upstreamRegDAO)
+
 	router.Route("/v2", func(r chi.Router) {})
-	router.Route("/api/v1", func(r chi.Router) {})
+
+	router.Route("/api/v1/upstreams", func(r chi.Router) {
+		r.Put("/{registry_id}", upstreamRegistryHandler.UpdateUpstreamRegistry)
+		r.Get("/{registry_id}", upstreamRegistryHandler.GetUpstreamRegistry)
+		r.Delete("/{registry_id}", upstreamRegistryHandler.DeleteUpstreamRegistry)
+		r.Post("/", upstreamRegistryHandler.CreateUpstreamRegistry)
+		r.Get("/", upstreamRegistryHandler.ListUpstreamRegisteries)
+	})
 
 	router.Get("/*", func(w http.ResponseWriter, r *http.Request) {
 		requestedPath := filepath.Join(webappBuildPath, r.URL.Path)
@@ -47,4 +60,8 @@ func InitRouter(webappBuildPath string) *chi.Mux {
 	})
 
 	return router
+}
+
+func handleManagementAPIs(r chi.Router) {
+
 }
