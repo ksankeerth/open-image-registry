@@ -77,10 +77,10 @@ type UpstreamOCIRegEntityWithAdditionalInfo struct {
 }
 
 type ListUpstreamRegistriesResponseMsg struct {
-	Total       int                                       `json:"total"`
-	Page        int                                       `json:"page"`
-	Limit       int                                       `json:"limit"`
-	Registeries []*UpstreamOCIRegEntityWithAdditionalInfo `json:"registeries"`
+	Total      int                                       `json:"total"`
+	Page       int                                       `json:"page"`
+	Limit      int                                       `json:"limit"`
+	Registries []*UpstreamOCIRegEntityWithAdditionalInfo `json:"registries"`
 }
 
 type UpstreamOCIRegResMsg struct {
@@ -89,4 +89,11 @@ type UpstreamOCIRegResMsg struct {
 	AccessConfig  UpstreamOCIRegAccessConfig  `json:"access_config"`
 	StorageConfig UpstreamOCIRegStorageConfig `json:"storage_config"`
 	CacheConfig   UpstreamOCIRegCacheConfig   `json:"cache_config"`
+}
+
+type UpstreamRegistryAddress struct {
+	Id          string
+	Name        string
+	Port        int
+	UpstreamUrl string
 }

@@ -152,8 +152,8 @@ func FileCorruptedError(action, location string) *StorageError {
 func InvalidOffsetError(action, location string) *StorageError {
 	return &StorageError{
 		errorCode: CodeInvalidOffset,
-		action: action,
-		location: location,
+		action:    action,
+		location:  location,
 	}
 }
 
@@ -262,4 +262,11 @@ func ClassifyError(err error, action, location string) *StorageError {
 		action:    action,
 		location:  location,
 	}
+}
+
+func UnwrapStorageError(err error) (ok bool, errorCode int) {
+	if se, ok := err.(*StorageError); ok {
+		return ok, se.errorCode
+	}
+	return false, CodeUnclassifiedError
 }

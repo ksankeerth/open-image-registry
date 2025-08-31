@@ -1,7 +1,6 @@
 package routes
 
 import (
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -15,7 +14,7 @@ import (
 	"github.com/ksankeerth/open-image-registry/handlers/api"
 )
 
-func InitRouter(webappBuildPath string, database *sql.DB) *chi.Mux {
+func InitRouter(webappBuildPath string) *chi.Mux {
 
 	router := chi.NewRouter()
 
@@ -28,24 +27,21 @@ func InitRouter(webappBuildPath string, database *sql.DB) *chi.Mux {
 	})
 
 	router.Use(corsMiddleware.Handler)
-	router.Use(httplog.RequestLogger(httplog.NewLogger("open-image-registry", httplog.Options{
+	router.Use(httplog.RequestLogger(httplog.NewLogger("ManagementAPI", httplog.Options{
 		LogLevel:         slog.LevelDebug,
 		Concise:          true,
 		RequestHeaders:   true,
 		MessageFieldName: "message",
 	})))
 
-	upstreamRegDAO := db.NewUpstreamRegistryDAO(database)
-	upstreamRegistryHandler := api.NewUpstreamRegistryHandler(&upstreamRegDAO)
-
-	router.Route("/v2", func(r chi.Router) {})
+	upstreamRegistryHandler := api.NewUpstreamRegistryHandler(db.GetUpstreamDAO())
 
 	router.Route("/api/v1/upstreams", func(r chi.Router) {
 		r.Put("/{registry_id}", upstreamRegistryHandler.UpdateUpstreamRegistry)
 		r.Get("/{registry_id}", upstreamRegistryHandler.GetUpstreamRegistry)
 		r.Delete("/{registry_id}", upstreamRegistryHandler.DeleteUpstreamRegistry)
 		r.Post("/", upstreamRegistryHandler.CreateUpstreamRegistry)
-		r.Get("/", upstreamRegistryHandler.ListUpstreamRegisteries)
+		r.Get("/", upstreamRegistryHandler.ListUpstreamRegistries)
 	})
 
 	router.Get("/*", func(w http.ResponseWriter, r *http.Request) {
@@ -63,6 +59,46 @@ func InitRouter(webappBuildPath string, database *sql.DB) *chi.Mux {
 	return router
 }
 
-func handleManagementAPIs(r chi.Router) {
+func GetDockerV2Router(regId, regName string) *chi.Mux {
+	router := chi.NewRouter()
 
+	router.Use(httplog.RequestLogger(httplog.NewLogger(fmt.Sprintf("DockerV2API-%s", regName), httplog.Options{
+		LogLevel:         slog.LevelDebug,
+		Concise:          true,
+		RequestHeaders:   true,
+		MessageFieldName: "message",
+	})))
+
+	dockerV2Handler := api.NewDockerV2Handler(regId, regName, db.GetImageRegDAO())
+
+	router.Route("/v2", func(r chi.Router) {
+		r.Get("/", dockerV2Handler.GetDockerV2APISupport)
+
+		//blob
+		r.Post("/{namespace}/{repository}/blobs/uploads/", dockerV2Handler.InitiateImageBlobUpload)
+		r.Post("/{repository}/blobs/uploads/", dockerV2Handler.InitiateImageBlobUpload)
+
+		r.Head("/{namespace}/{repository}/blobs/{digest}", dockerV2Handler.CheckImageBlobExistence)
+		r.Head("/{repository}/blobs/{digest}", dockerV2Handler.CheckImageBlobExistence)
+
+		r.Put("/{namespace}/{repository}/blobs/uploads/{session_id}", dockerV2Handler.HandleImageBlobUpload)
+		r.Put("/{repository}/blobs/uploads/{session_id}", dockerV2Handler.HandleImageBlobUpload)
+
+		r.Patch("/{namespace}/{repository}/blobs/uploads/{session_id}", dockerV2Handler.HandleImageBlobUpload)
+		r.Patch("/{repository}/blobs/uploads/{session_id}", dockerV2Handler.HandleImageBlobUpload)
+
+		r.Get("/{namespace}/{repository}/blobs/{digest}", dockerV2Handler.GetImageBlob)
+		r.Get("/{repository}/blobs/{digest}", dockerV2Handler.GetImageBlob)
+
+		r.Head("/{namespace}/{repository}/manifests/{tag_or_digest}", dockerV2Handler.CheckImageManifestExistence)
+		r.Head("/{repository}/manifests/{tag_or_digest}", dockerV2Handler.CheckImageManifestExistence)
+
+		r.Put("/{namespace}/{repository}/manifests/{tag}", dockerV2Handler.UpdateManifest)
+		r.Put("/{repository}/manifests/{tag}", dockerV2Handler.UpdateManifest)
+
+		r.Get("/{namespace}/{repository}/manifests/{tag_or_digest}", dockerV2Handler.GetImageManifest)
+		r.Get("/{repository}/manifests/{tag_or_digest}", dockerV2Handler.GetImageManifest)
+	})
+
+	return router
 }

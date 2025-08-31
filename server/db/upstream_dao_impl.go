@@ -11,26 +11,45 @@ import (
 
 type upstreamDaoImpl struct {
 	db *sql.DB
-}
-
-func NewUpstreamRegistryDAO(db *sql.DB) UpstreamDAO {
-	return &upstreamDaoImpl{db}
+	*TransactionManager
 }
 
 func (u *upstreamDaoImpl) CreateUpstreamRegistry(upstreamReg *types.UpstreamOCIRegEntity,
 	authConfig *types.UpstreamOCIRegAuthConfig, accessConfig *types.UpstreamOCIRegAccessConfig,
 	storageConfig *types.UpstreamOCIRegStorageConfig,
-	cacheConfig *types.UpstreamOCIRegCacheConfig) (regId string, regName string, err error) {
-	tx, err := u.db.Begin()
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Unable to acuquire db transaction to create upstream OCI registry")
-		return "", "", db.ClassifyError(err, "BEGIN TRANSACTION")
-	}
-	defer func(tx *sql.Tx) {
+	cacheConfig *types.UpstreamOCIRegCacheConfig, txKey string) (regId string, regName string, err error) {
+	var tx *sql.Tx
+	// if user provided txKey, We'd use transasaction stored in TransactionManager. Otherwise, We'll obtain
+	// new trasaction.
+	if txKey != "" {
+		tx = u.getTx(txKey)
+		if tx == nil {
+			log.Logger().Error().Msgf("Transaction associated with `txKey`(%s) was not found", txKey)
+			return "", "", db.ErrTxAlreadyClosed
+		}
+	} else {
+		tx, err = u.db.Begin()
 		if err != nil {
-			_ = tx.Rollback()
+			log.Logger().Error().Err(err).Msg("Unable to acuquire db transaction to create upstream OCI registry")
+			return "", "", db.ClassifyError(err, "BEGIN")
+		}
+	}
+
+	defer func(tx *sql.Tx) {
+		// If tx was created by caller, call will take care of closing it.
+		if txKey != "" {
+			return
+		}
+		if err != nil {
+			err = tx.Rollback()
+			if err != nil {
+				log.Logger().Error().Err(err).Msg("Error occured when rolling back transaction")
+			}
 		} else {
-			_ = tx.Commit()
+			err = tx.Commit()
+			if err != nil {
+				log.Logger().Error().Err(err).Msg("Error occured when commiting transaction")
+			}
 		}
 	}(tx)
 
@@ -70,7 +89,7 @@ func (u *upstreamDaoImpl) CreateUpstreamRegistry(upstreamReg *types.UpstreamOCIR
 		return "", "", db.ClassifyError(err, InsertUpstreamOciRegistryAccessConfig)
 	}
 	if r, err := res.RowsAffected(); r <= 0 || err != nil {
-		log.Logger().Warn().Err(err).Msgf("Persisting UpstreamOciRegistryAccessConfigUpstreamOciRegistryAuthConfig is not successful", upstreamReg.Name)
+		log.Logger().Warn().Err(err).Msgf("Persisting UpstreamOciRegistryAccessConfigUpstreamOciRegistryAuthConfig of registry(%s) is not successful", upstreamReg.Name)
 		return "", "", db.ClassifyError(err, InsertUpstreamOciRegistryAccessConfig)
 	}
 
@@ -81,7 +100,7 @@ func (u *upstreamDaoImpl) CreateUpstreamRegistry(upstreamReg *types.UpstreamOCIR
 		return "", "", db.ClassifyError(err, InsertUpstreamOciRegistryStorageConfig)
 	}
 	if r, err := res.RowsAffected(); r <= 0 || err != nil {
-		log.Logger().Warn().Err(err).Msgf("Persisting UpstreamOciRegistryStorageConfig is not successful", upstreamReg.Name)
+		log.Logger().Warn().Err(err).Msgf("Persisting UpstreamOciRegistryStorageConfig of registry(%s) is not successful", upstreamReg.Name)
 		return "", "", db.ClassifyError(err, InsertUpstreamOciRegistryStorageConfig)
 	}
 
@@ -143,15 +162,15 @@ func (u *upstreamDaoImpl) GetUpstreamRegistryWithConfig(regId string) (*types.Up
 		&storage.StorageLimitInMbs, &storage.CleanupPolicy, &storage.CleanupThreshold, &storage.UpdatedAt,
 		&cache.TtlInSeconds, &cache.OfflineMode, &cache.UpdatedAt)
 
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Unable to retrive upstream registery with config: %s", regId)
+		return nil, nil, nil, nil, nil, db.ClassifyError(err, GetUpstreamOCIRegistryWithConfig)
+	}
+
 	err = json.Unmarshal(credentialJsonBytes, &auth.CredentialJson)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occured when unmarshalling auth.CredentialJson")
 		return nil, nil, nil, nil, nil, err
-	}
-
-	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Unable to retrive upstream registery with config: %s", regId)
-		return nil, nil, nil, nil, nil, db.ClassifyError(err, GetUpstreamOCIRegistryWithConfig)
 	}
 
 	return &reg, &access, &auth, &cache, &storage, nil

@@ -15,15 +15,16 @@ import (
 	"github.com/ksankeerth/open-image-registry/handlers/common"
 	"github.com/ksankeerth/open-image-registry/log"
 	"github.com/ksankeerth/open-image-registry/types"
+	"github.com/ksankeerth/open-image-registry/utils"
 )
 
 type UpstreamRegistryHandler struct {
 	dao db.UpstreamDAO
 }
 
-func NewUpstreamRegistryHandler(dao *db.UpstreamDAO) *UpstreamRegistryHandler {
+func NewUpstreamRegistryHandler(dao db.UpstreamDAO) *UpstreamRegistryHandler {
 	return &UpstreamRegistryHandler{
-		dao: *dao,
+		dao: dao,
 	}
 }
 
@@ -44,7 +45,7 @@ func (h *UpstreamRegistryHandler) CreateUpstreamRegistry(w http.ResponseWriter, 
 	}
 
 	regId, regName, err := h.dao.CreateUpstreamRegistry(&reqBody.UpstreamOCIRegEntity, &reqBody.AuthConfig,
-		&reqBody.AccessConfig, &reqBody.StorageConfig, &reqBody.CacheConfig)
+		&reqBody.AccessConfig, &reqBody.StorageConfig, &reqBody.CacheConfig, "")
 
 	if err != nil {
 		if yes, column := db_errors.IsUniqueConstraint(err); yes {
@@ -143,7 +144,7 @@ func (h *UpstreamRegistryHandler) GetUpstreamRegistry(w http.ResponseWriter, r *
 
 // ListUpstreamRegisteries returns all the upstream registeries. In future, We may support filter
 // for advanced use-cases. #TODO
-func (h *UpstreamRegistryHandler) ListUpstreamRegisteries(w http.ResponseWriter, r *http.Request) {
+func (h *UpstreamRegistryHandler) ListUpstreamRegistries(w http.ResponseWriter, r *http.Request) {
 	registeries, err := h.dao.ListUpstreamRegistries()
 	if err != nil {
 		if db_errors.IsNotFound(err) {
@@ -163,7 +164,7 @@ func (h *UpstreamRegistryHandler) ListUpstreamRegisteries(w http.ResponseWriter,
 		Total:       len(registeries),
 		Limit:       len(registeries),
 		Page:        1,
-		Registeries: registeries,
+		Registries: registeries,
 	}
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -176,6 +177,9 @@ func (h *UpstreamRegistryHandler) ListUpstreamRegisteries(w http.ResponseWriter,
 func validateCreateUpstreamRegistryRequest(req *types.CreateUpstreamRegRequestMsg) (bool, string) {
 	if req.Name == "" {
 		return false, "Registry Name is not provided"
+	}
+	if !utils.IsValidRegistry(req.Name) {
+		return false, "Registry Name has invalid characters. Allowed characters: a-zA-Z0-9_-"
 	}
 
 	if req.Port <= 1024 && req.Port > 65535 {
