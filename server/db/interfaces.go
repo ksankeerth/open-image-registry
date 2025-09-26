@@ -3,7 +3,7 @@ package db
 import (
 	"time"
 
-	"github.com/ksankeerth/open-image-registry/types"
+	"github.com/ksankeerth/open-image-registry/types/models"
 )
 
 // Transactional defines the ability to execute queries inside transactions.
@@ -25,36 +25,36 @@ type UpstreamDAO interface {
 	Transactional
 
 	// CreateUpstreamRegistry persists a new upstream registry along with its configurations.
-	CreateUpstreamRegistry(upstreamReg *types.UpstreamOCIRegEntity,
-		authConfig *types.UpstreamOCIRegAuthConfig,
-		accessConfig *types.UpstreamOCIRegAccessConfig,
-		storageConfig *types.UpstreamOCIRegStorageConfig,
-		cacheConfig *types.UpstreamOCIRegCacheConfig,
+	CreateUpstreamRegistry(upstreamReg *models.UpstreamRegistryEntity,
+		authConfig *models.UpstreamRegistryAuthConfig,
+		accessConfig *models.UpstreamRegistryAccessConfig,
+		storageConfig *models.UpstreamRegistryStorageConfig,
+		cacheConfig *models.UpstreamRegistryCacheConfig,
 		txKey string) (regId string, regName string, err error)
 
 	// UpdateUpstreamRegistry updates the registry and its configurations.
-	UpdateUpstreamRegistry(regId string, upstreamReg *types.UpstreamOCIRegEntity,
-		authConfig *types.UpstreamOCIRegAuthConfig,
-		accessConfig *types.UpstreamOCIRegAccessConfig,
-		storageConfig *types.UpstreamOCIRegStorageConfig,
-		cacheConfig *types.UpstreamOCIRegCacheConfig) error
+	UpdateUpstreamRegistry(regId string, upstreamReg *models.UpstreamRegistryEntity,
+		authConfig *models.UpstreamRegistryAuthConfig,
+		accessConfig *models.UpstreamRegistryAccessConfig,
+		storageConfig *models.UpstreamRegistryStorageConfig,
+		cacheConfig *models.UpstreamRegistryCacheConfig) error
 
 	// ListUpstreamRegistries returns all upstream registries with additional metadata.
-	ListUpstreamRegistries() ([]*types.UpstreamOCIRegEntityWithAdditionalInfo, error)
+	ListUpstreamRegistries() ([]*models.UpstreamRegistrySummary, error)
 
 	// DeleteUpstreamRegistry removes a registry by ID.
 	DeleteUpstreamRegistry(regId string) error
 
-	// GetUpstreamRegistry fetches a registry by ID without configs.
-	GetUpstreamRegistry(regId string) (*types.UpstreamOCIRegEntity, error)
-
 	// GetUpstreamRegistryWithConfig fetches a registry and its associated configs.
-	GetUpstreamRegistryWithConfig(regId string) (*types.UpstreamOCIRegEntity,
-		*types.UpstreamOCIRegAccessConfig,
-		*types.UpstreamOCIRegAuthConfig,
-		*types.UpstreamOCIRegCacheConfig,
-		*types.UpstreamOCIRegStorageConfig,
+	GetUpstreamRegistryWithConfig(regId string) (*models.UpstreamRegistryEntity,
+		*models.UpstreamRegistryAccessConfig,
+		*models.UpstreamRegistryAuthConfig,
+		*models.UpstreamRegistryCacheConfig,
+		*models.UpstreamRegistryStorageConfig,
 		error)
+
+	// GetActiveUpstreamAddresses loads all active upstream registry and return addresses of them
+	GetActiveUpstreamAddresses() (upstreamAddrs []*models.UpstreamRegistryAddress, err error)
 }
 
 // ImageRegistryDAO defines data-access operations for image registries.
@@ -65,7 +65,7 @@ type ImageRegistryDAO interface {
 	// ---- Namespace / Repository ----
 
 	// CreateNamespaceAndRepositoryIfNotExist ensures a namespace and repository exist,
-	// creating them if necessary.
+	// create them if necessary.
 	CreateNamespaceAndRepositoryIfNotExist(regId, namespace, repository string,
 		txKey string) (namespaceId, repositoryId string, err error)
 
@@ -74,81 +74,49 @@ type ImageRegistryDAO interface {
 
 	// ---- Blob ----
 
-	// CheckImageBlobExists returns true if the blob exists, false otherwise.
-	CheckImageBlobExists(digest, namespace, repository, regId string, txKey string) (bool, error)
-
-	// CheckImageBlobExistsByIds is an optimized variant using namespace/repository IDs.
-	CheckImageBlobExistsByIds(digest, namespaceId, repositoryId, regId string, txKey string) (bool, error)
-
 	// GetImageBlobStorageLocationAndSize returns blob storage location and size.
 	GetImageBlobStorageLocationAndSize(digest, namespace, repository,
 		regId string, txKey string) (storageLocation string, size int, err error)
 
-	// GetImageBlobStorageLocationAndSizeByIds is an optimized variant using IDs.
-	GetImageBlobStorageLocationAndSizeByIds(digest, namespaceId, repositoryId,
-		regId string, txKey string) (storageLocation string, size int, err error)
-
 	// PersistImageBlobMetaInfo stores blob metadata (location, type, size).
-	PersistImageBlobMetaInfo(registryId, namespaceId, repositoryId, digest, location, mediaType string,
+	PersistImageBlobMetaInfo(registryId, namespaceId, repositoryId, digest, location string,
 		size int64, txKey string) error
-
-	// ---- Blob Upload Sessions ----
-
-	GetBlobUploadSession(sessionId string, txKey string) (id string, isChunked bool, lastUpdated time.Time, err error)
-	CreateNewBlobUploadSession(registryId, namespaceId, repositoryId, sessionId string, txKey string) error
-	DeleteBlobUploadSession(sessionId string, txKey string) error
-	MarkBlobUploadSessionAsChunked(sessionId string, txKey string) error
 
 	// ---- Manifest ----
 
-	// CheckImageManifestExists returns true if the manifest exists, false otherwise.
-	CheckImageManifestExists(manifestUniqDigest, namespace, repository, regId string, txKey string) (bool, error)
+	CheckImageManifestExistsByTag(registryId, namespaceId, repositoryId, tag string, txKey string) (exists bool, digest, mediaType string, err error)
 
-	// GetImageManifestsByTag returns manifests for a given tag including platform info.
-	GetImageManifestsByTag(tag, namespace, repository, regId string,
-		txKey string) ([]*types.ImageManifestWithPlatform, error)
+	CheckImageManifestExistsByDigest(registryId, namespaceId, repositoryId, digest string, txKey string) (exists bool, mediaType string, err error)
 
-	// CheckImageManifestsExistByTag returns true if manifests exist for the given tag.
-	CheckImageManifestsExistByTag(regId, namespace, repository, tag, txKey string) (bool, error)
+	GetImageManifestByTag(registryId, namespaceId, repositoryId, tag string, txKey string) (exists bool, content []byte, digest, mediaType string, err error)
 
-	// GetImageManifestByDigest fetches manifest content, type, and size.
-	GetImageManifestByDigest(digest, namespace, repository, regId string, txKey string) (
-		content []byte, mediaType string, size int, err error)
+	GetImageManifestByDigest(registryId, namespaceId, repositoryId, digest string, txKey string) (exists bool, content []byte, mediaType string, err error)
+
+	CheckImageManifestExistsByUniqueDigest(registryId, namespaceId, repositoryId, unqiqueDigest string,
+		txKey string) (exists bool, id string, err error)
 
 	// PersistImageManifest stores a new image manifest and its metadata.
-	PersistImageManifest(regId, namespaceId, repositoryId, manifestDigest,
-		imageConfigDigest, mediaType, uniqueDigest string, size int64,
-		content []byte, txKey string) error
+	PersistImageManifest(regId, namespaceId, repositoryId, manifestDigest, mediaType, uniqueDigest string, size int64,
+		content []byte, txKey string) (id string, err error)
 
 	// ---- Tag ----
 
 	GetImageTagId(regId, namespaceId, repositoryId, tag, txKey string) (tagId string, err error)
 	CreateImageTag(regId, namespaceId, repositoryId, tag string, txKey string) (tagId string, err error)
 
-	// ---- Config ----
+	// ---- Registry Cache ----
 
-	// MarkImageBlobAsConfig marks a blob as an image config.
-	MarkImageBlobAsConfig(regId, namespaceId, repositoryId, blobDigest, txKey string) error
+	CacheImageManifestReference(regId, namespaceId, repositoryId, identifier string,
+		expiresAt time.Time, txKey string) error
+	GetCacheImageManifestReference(regId, namespaceId, repositoryId, identifier string,
+		txKey string) (cacheMiss bool, digest string, expiresAt time.Time, err error)
+	DeleteCacheImageManifestReference(regId, namespaceId, repositoryId, identifier string, txKey string) error
+	RefreshCacheImageManifestReference(regId, namespaceId, repositoryId, identifier string, expiresAt time.Time, txKey string) error
 
-	// CheckImageTagAndConfigDigestMapping checks whether a config is already linked to a tag.
-	CheckImageTagAndConfigDigestMapping(configDigest, tagId, txKey string) (exists bool, err error)
+	// ---- Tag ↔ Manifest Linking ----
 
-	// LinkImageConfigWithTag links a config digest to a tag.
-	LinkImageConfigWithTag(configDigest, tagId, txKey string) error
+	LinkImageManifestWithTag(tagId, manifestId string, txKey string) error
+	UpdateManifestIdForTag(tagId string, newManifestId string, txKey string) error
 
-	// PersistImagePlatformConfig stores platform-specific metadata for an image config.
-	PersistImagePlatformConfig(regId, namespaceId, repositoryId, tagId,
-		configDigest, os, arch string, props []byte, txKey string) error
-
-	// CheckImagePlatformConfigExistence verifies if a platform config already exists.
-	CheckImagePlatformConfigExistence(tagId, configDigest string, txKey string) (bool, error)
-
-	// ---- Tag ↔ Layer ----
-
-	// LinkImageTagAndLayer links a tag with a layer digest and config.
-	LinkImageTagAndLayer(regId, namespaceId, repositoryId, tagId, layerDigest,
-		configDigest string, index int, txKey string) error
-
-	// CheckImageTagAndLayerMappingExistence checks if a tag-layer mapping already exists.
-	CheckImageTagAndLayerMappingExistence(tagId, layerDigest string, layerIndex int, txKey string) (bool, error)
+	GetLinkedManifestByTagId(tagId string, txKey string) (manifestId string, err error)
 }

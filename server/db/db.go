@@ -2,126 +2,81 @@ package db
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
 	sqlite3 "modernc.org/sqlite"
 
 	"github.com/ksankeerth/open-image-registry/errors/db"
-	db_errors "github.com/ksankeerth/open-image-registry/errors/db"
 	"github.com/ksankeerth/open-image-registry/lib"
 	"github.com/ksankeerth/open-image-registry/log"
-	"github.com/ksankeerth/open-image-registry/types"
 )
 
-var database *sql.DB
-var tm *TransactionManager
-var imgRegDao ImageRegistryDAO
-var upstreamDao UpstreamDAO
-var once sync.Once
+var initCalled int32
 
-func InitDB() (*sql.DB, error) {
-	var err error
-	once.Do(func() {
-		serverDir, err1 := os.Getwd()
-		if err != nil {
-			log.Logger().Err(err1).Msg("Unable to detect server director in runtime using os.Getwd()")
-			err = err1
-			return
-		}
+// InitDB initializes the DB and transaction manager.
+// Returns an error if initialization failed.
+// This method must be called once and repeated calls will panic
+func InitDB() (database *sql.DB, tm *TransactionManager, err error) {
 
-		// TODO: Add hooks to DB calls so we can monitor query performance
-		sql.Register("sqlite-hooked", &sqlite3.Driver{})
+	if !atomic.CompareAndSwapInt32(&initCalled, 0, 1) {
+		panic("InitDB() called multiple times - should only be called once from main.go")
+	}
 
-		database, err1 = sql.Open("sqlite-hooked", fmt.Sprintf("file:%s?cache=shared&_fk=1", filepath.Join(serverDir, "open_image_registry.db")))
-		if err1 != nil {
-			log.Logger().Err(err1).Msg("Unable to open SQL connection to Sqlite")
-			err = err1
-			return
-		}
-
-		scriptsPath := filepath.Join(serverDir, "db-scripts/sqlite.sql")
-		contentBytes, err1 := os.ReadFile(scriptsPath)
-		if err1 != nil {
-			log.Logger().Error().Err(err1).Msgf("Unable to open DB scripts to create table: %s", scriptsPath)
-			err = err1
-			return
-		}
-
-		_, err1 = database.Exec(string(contentBytes))
-		if err1 != nil {
-			log.Logger().Error().Err(err1).Msg("Error occurred when executing DB scripts")
-			err = err1
-			return
-		}
-
-		tm = &TransactionManager{
-			db:       database,
-			keyLocks: lib.NewKeyLock(),
-		}
-
-		imgRegDao = &imageRegistryDaoImpl{
-			db:                 database,
-			TransactionManager: tm,
-		}
-
-		upstreamDao = &upstreamDaoImpl{
-			db:                 database,
-			TransactionManager: tm,
-		}
-	})
-
+	serverDir, err := os.Getwd()
 	if err != nil {
-		return nil, err
+		log.Logger().Error().Err(err).Msgf("Unable to get current working directory")
+		return
 	}
 
-	return database, nil
-}
+	// Register sqlite driver with hooks
+	sql.Register("sqlite-hooked", &sqlite3.Driver{})
 
-func LoadUpstreamRegistryAddresses() (upstreamAddrs []*types.UpstreamRegistryAddress, err error) {
-	if database == nil {
-		log.Logger().Error().Msgf("Database reference is nil.")
-		panic("Database reference is nil.")
+	dbPath := filepath.Join(filepath.Dir(serverDir), "registry_sqlite.db")
+	database, err = sql.Open("sqlite-hooked", fmt.Sprintf("file:%s?cache=shared&_fk=1", dbPath))
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Unable to initialize database from configuration")
+		return
 	}
-	rows, err := database.Query(LoadActiveUpstreamRegistryAddressess)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		log.Logger().Log().Err(err).Msg("Unable to load upstream addresses")
-		return nil, db_errors.ClassifyError(err, LoadActiveUpstreamRegistryAddressess)
+
+	// Verify database connection
+	if err = database.Ping(); err != nil {
+		database.Close()
+		database = nil
+		log.Logger().Error().Err(err).Msgf("Ping failed to the database")
+		return
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var upstreamAddr types.UpstreamRegistryAddress
-
-		err = rows.Scan(&upstreamAddr.Id, &upstreamAddr.Name, &upstreamAddr.Port, &upstreamAddr.UpstreamUrl)
-		if err != nil {
-			log.Logger().Error().Err(err).Msgf("Failed to read results of upstream registry addresses")
-			return nil, db_errors.ClassifyError(err, LoadActiveUpstreamRegistryAddressess)
-		}
-		upstreamAddrs = append(upstreamAddrs, &upstreamAddr)
+	// Run schema migrations
+	scriptsPath := filepath.Join(filepath.Dir(serverDir), "db-scripts/sqlite/registry.sql")
+	contentBytes, err := os.ReadFile(scriptsPath)
+	if err != nil {
+		database.Close()
+		database = nil
+		log.Logger().Error().Err(err).Msgf("Error occured when reading schema file")
+		return
 	}
-	return upstreamAddrs, nil
-}
 
-func GetImageRegDAO() ImageRegistryDAO {
-	return imgRegDao
-}
+	if _, err = database.Exec(string(contentBytes)); err != nil {
+		database.Close()
+		database = nil
+		log.Logger().Error().Err(err).Msgf("Error occured when initializing schema")
+		return
+	}
 
-func GetUpstreamDAO() UpstreamDAO {
-	return upstreamDao
-}
+	tm = &TransactionManager{
+		db:       database,
+		keyLocks: lib.NewKeyLock(),
+	}
 
-func GetTransactionManager() *TransactionManager {
-	once.Do(func() {
-		tm = &TransactionManager{
-			db:       database,
-			keyLocks: lib.NewKeyLock(),
-		}
-	})
-	return tm
+	if database == nil || tm == nil {
+		panic("not allowed to initialized database multiple times")
+	}
+
+	return database, tm, nil
 }
 
 type TransactionManager struct {
@@ -144,6 +99,9 @@ func (tm *TransactionManager) Begin(key string) error {
 		tm.transactionsMap.Store(key, tx)
 		return nil
 	}
+	// TODO: instead of db.ErrTxCreationFailed, we should send another error to indicate that
+	// there is a transaction with same key.
+	// Caller can implement retry.
 	return db.ErrTxCreationFailed
 }
 
@@ -204,4 +162,18 @@ func (tm *TransactionManager) getTx(key string) *sql.Tx {
 	}
 	tx, _ := v.(*sql.Tx)
 	return tx
+}
+
+func NewImageRegistryDAO(database *sql.DB, tm *TransactionManager) ImageRegistryDAO {
+	return &imageRegistryDaoImpl{
+		db:                 database,
+		TransactionManager: tm,
+	}
+}
+
+func NewUpstreamDAO(database *sql.DB, tm *TransactionManager) UpstreamDAO {
+	return &upstreamDaoImpl{
+		db:                 database,
+		TransactionManager: tm,
+	}
 }

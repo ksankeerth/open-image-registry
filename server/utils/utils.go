@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const NameRegex = "^[a-zA-Z0-9_-]+$"
@@ -86,4 +87,29 @@ func CombineAndCalculateSHA256Digest(inputs ...string) string {
 	hash := sha256.New()
 	hash.Write([]byte(strings.Join(inputs, ":")))
 	return fmt.Sprintf("sha256:%x", hash.Sum(nil))
+}
+
+func ParseSqliteTimestamp(timeStr string) (time.Time, error) {
+	// Strip monotonic clock part if present (e.g. "2025-09-05 11:41:39.976848 +0530 +0530 m=+339.588692899")
+	timeStr = strings.SplitN(timeStr, " m=", 2)[0]
+
+	// Try parsing with timezone offset and repeated offset
+	t, err := time.Parse("2006-01-02 15:04:05.999999 -0700 -0700", timeStr)
+	if err == nil {
+		return t, nil
+	}
+
+	// Fallback: SQLite may store as ISO8601 (e.g. "2025-09-05T11:41:39Z")
+	t, err = time.Parse(time.RFC3339Nano, timeStr)
+	if err == nil {
+		return t, nil
+	}
+
+	// Fallback: SQLite default (no TZ, no T)
+	t, err = time.Parse("2006-01-02 15:04:05", timeStr)
+	if err == nil {
+		return t, nil
+	}
+
+	return time.Time{}, fmt.Errorf("cannot parse SQLite timestamp: %s", timeStr)
 }

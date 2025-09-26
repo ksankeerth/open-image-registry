@@ -5,9 +5,11 @@ webapp/build/
 
 # Server
 server/go.sum
+server/cmd/server/bin
 
 # other 
 bin/
+
 
 # VScode
 .vscode/
@@ -16,3 +18,6 @@ bin/
 *.db
 
 temp/
+
+debugging-tools/
+poc_scripts/

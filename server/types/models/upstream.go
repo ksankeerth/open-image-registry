@@ -1,11 +1,10 @@
-package types
+package models
 
 import "time"
 
-type UpstreamOCIRegEntity struct {
+type UpstreamRegistryEntity struct {
 	Id          string    `json:"id,omitempty"`
 	Name        string    `json:"name"`
-	Url         string    `json:"url"`
 	Port        int       `json:"port"`
 	Status      string    `json:"status,omitempty"`
 	UpstreamUrl string    `json:"upstream_url"`
@@ -13,8 +12,7 @@ type UpstreamOCIRegEntity struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// UpstreamOCIRegAuthConfig defines auth config to access upstream registry.
-type UpstreamOCIRegAuthConfig struct {
+type UpstreamRegistryAuthConfig struct {
 	// AuthType defines authentication methods. Possible values: `anonymous`, `basic`, `bearer`
 	AuthType string `json:"auth_type"`
 	// CredentialJson contains required data for the defined `AuthType`. eg:
@@ -24,13 +22,12 @@ type UpstreamOCIRegAuthConfig struct {
 	CredentialJson map[string]interface{} `json:"credentials_json,omitempty"`
 	// If `AuthType` is `oauth2`, the `TokenEndpoint` defines url to get the token.
 	TokenEndpoint string `json:"token_endpoint"`
-	// Certificate hold RSA certificate if the `AuthType` is mtls.
-	Certificate string `json:"certificate"`
+
 	// UpdatedAt is read only field.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 }
 
-type UpstreamOCIRegAccessConfig struct {
+type UpstreamRegistryAccessConfig struct {
 	ProxyEnabled               bool      `json:"proxy_enabled"`
 	ProxyUrl                   string    `json:"proxy_url,omitempty"`
 	ConnectionTimeoutInSeconds int       `json:"connection_timeout"`
@@ -41,54 +38,23 @@ type UpstreamOCIRegAccessConfig struct {
 	UpdatedAt                  time.Time `json:"updated_at"`
 }
 
-type UpstreamOCIRegStorageConfig struct {
+type UpstreamRegistryStorageConfig struct {
 	StorageLimitInMbs float32   `json:"storage_limit"`
 	CleanupPolicy     string    `json:"cleanup_policy"`
 	CleanupThreshold  float32   `json:"cleanup_threshold"`
 	UpdatedAt         time.Time `json:"updated_at"`
 }
 
-type UpstreamOCIRegCacheConfig struct {
+type UpstreamRegistryCacheConfig struct {
+	Enabled      bool      `json:"enabled"`
 	TtlInSeconds int       `json:"ttl_seconds"`
 	OfflineMode  bool      `json:"offline_mode"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
-// -------------------------------- types of request and response --------------------------------------
-
-type CreateUpstreamRegRequestMsg struct {
-	UpstreamOCIRegEntity
-	AuthConfig    UpstreamOCIRegAuthConfig    `json:"auth_config"`
-	AccessConfig  UpstreamOCIRegAccessConfig  `json:"access_config"`
-	StorageConfig UpstreamOCIRegStorageConfig `json:"storage_config"`
-	CacheConfig   UpstreamOCIRegCacheConfig   `json:"cache_config"`
-}
-
-type UpdateUpstreamRegRequestMsg = CreateUpstreamRegRequestMsg
-
-type CreateUpstreamRegResMsg struct {
-	RegId   string `json:"reg_id"`
-	RegName string `json:"reg_name"`
-}
-
-type UpstreamOCIRegEntityWithAdditionalInfo struct {
-	UpstreamOCIRegEntity
-	CachedImagesCount int `json:"cached_images_count"`
-}
-
-type ListUpstreamRegistriesResponseMsg struct {
-	Total      int                                       `json:"total"`
-	Page       int                                       `json:"page"`
-	Limit      int                                       `json:"limit"`
-	Registries []*UpstreamOCIRegEntityWithAdditionalInfo `json:"registries"`
-}
-
-type UpstreamOCIRegResMsg struct {
-	UpstreamOCIRegEntity
-	AuthConfig    UpstreamOCIRegAuthConfig    `json:"auth_config"`
-	AccessConfig  UpstreamOCIRegAccessConfig  `json:"access_config"`
-	StorageConfig UpstreamOCIRegStorageConfig `json:"storage_config"`
-	CacheConfig   UpstreamOCIRegCacheConfig   `json:"cache_config"`
+type UpstreamRegistrySummary struct {
+	UpstreamRegistryEntity
+	CachedImagesCount int
 }
 
 type UpstreamRegistryAddress struct {
