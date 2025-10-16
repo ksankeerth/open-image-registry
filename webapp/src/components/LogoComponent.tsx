@@ -1,24 +1,39 @@
 import React from "react";
 import logo from "./../assets/logo.png";
+import { classNames } from "primereact/utils";
 
-const LogoComponent = () => {
+type LogoProps = {
+  showNameInOneLine: boolean;
+  // showNameAndLogoInOneLine: boolean;
+};
+
+const LogoComponent = (props: LogoProps) => {
   return (
     <div className="flex-grow-1 flex align-items-center	">
-      <img src={logo} className="h-4rem" />
-      <div className="flex flex-column">
+      <div>
+        <img src={logo} className="h-4rem" />
+      </div>
+
+      <div
+        className={classNames(
+          "flex",
+          props.showNameInOneLine ? "flex-row" : "flex-column"
+        )}
+      >
         <div
           className="text-green-300"
           style={{
             fontFamily: "Major Mono Display, monospace",
-            fontSize: 18,
+            fontSize: props.showNameInOneLine ? 24 : 18,
           }}
         >
           OPEN IMAGE
         </div>
+        {props.showNameInOneLine && <span>&nbsp;&nbsp;&nbsp;</span>}
         <div
           style={{
             fontFamily: "Major Mono Display, monospace",
-            fontSize: 20,
+            fontSize: props.showNameInOneLine ? 24 : 20,
             color: "#007700",
           }}
         >
