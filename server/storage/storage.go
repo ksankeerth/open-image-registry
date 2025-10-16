@@ -3,6 +3,8 @@ package storage
 import (
 	"path/filepath"
 	"sync"
+
+	"github.com/ksankeerth/open-image-registry/config"
 )
 
 type BlobStorage interface {
@@ -33,11 +35,11 @@ var once sync.Once
 // TODO later, this function should take config as argument, based on the configuration
 // it should initialize appropriate storage backend.
 // if error is returned, the caller should fix the issues and re-start the server.
-func Init(serverDir string) (err error) {
+func Init(config *config.StorageConfig) (err error) {
 	once.Do(func() {
 		if storage == nil {
 			storage = NewLFS(map[string]string{
-				"fs.storage.path": filepath.Join(serverDir, "storage", "lfs"),
+				"fs.storage.path": filepath.Join(config.Path, "storage", "lfs"),
 			})
 			err = storage.Init()
 			if err != nil {
