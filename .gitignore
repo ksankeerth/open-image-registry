@@ -13,6 +13,7 @@ bin/
 
 # VScode
 .vscode/
+.DS_Store
 
 # db
 *.db
@@ -21,3 +22,5 @@ temp/
 
 debugging-tools/
 poc_scripts/
+related-tools/
+
