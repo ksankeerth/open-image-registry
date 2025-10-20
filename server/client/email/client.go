@@ -65,6 +65,12 @@ func NewEmailClient(config *config.EmailSenderConfig, templateDir, logoUrl strin
 func (ec *EmailClient) sendEmail(to, subject string, selectedTmpl *template.Template,
 	templateParams map[string]string) error {
 
+	devConfig := config.GetDevelopmentConfig()
+	if devConfig.Enable && devConfig.MockEmail {
+		log.Logger().Info().Msgf("Mock Mail in Development Mode: Subject: %s, To: %s, Params: %v", subject, to, templateParams)
+		return nil
+	}
+
 	msg := mail.NewMsg()
 	err := msg.From(ec.from)
 	if err != nil {
