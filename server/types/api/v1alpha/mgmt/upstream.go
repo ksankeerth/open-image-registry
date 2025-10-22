@@ -76,20 +76,20 @@ type ListUpstreamsResponse struct {
 
 type UpstreamAuthConfigResponse struct {
 	UpstreamAuthConfigDTO
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt *time.Time `json:"updated_at"`
 }
 
 type UpstreamAccessConfigResponse struct {
 	UpstreamAccessConfigDTO
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt *time.Time `json:"updated_at"`
 }
 
 type UpstreamStorageConfigResponse struct {
 	UpstreamStorageConfigDTO
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt *time.Time `json:"updated_at"`
 }
 
 type UpstreamCacheConfigResponse struct {
@@ -105,7 +105,7 @@ type UpstreamRegistryResponse struct {
 	Status        string                        `json:"status,omitempty"`
 	UpstreamUrl   string                        `json:"upstream_url"`
 	CreatedAt     time.Time                     `json:"created_at"`
-	UpdatedAt     time.Time                     `json:"updated_at"`
+	UpdatedAt     *time.Time                    `json:"updated_at"`
 	AuthConfig    UpstreamAuthConfigResponse    `json:"auth_config"`
 	AccessConfig  UpstreamAccessConfigResponse  `json:"access_config"`
 	StorageConfig UpstreamStorageConfigResponse `json:"storage_config"`
