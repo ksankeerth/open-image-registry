@@ -9,7 +9,7 @@ type UpstreamRegistryEntity struct {
 	Status      string    `json:"status,omitempty"`
 	UpstreamUrl string    `json:"upstream_url"`
 	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	UpdatedAt   *time.Time `json:"updated_at"`
 }
 
 type UpstreamRegistryAuthConfig struct {
@@ -24,7 +24,7 @@ type UpstreamRegistryAuthConfig struct {
 	TokenEndpoint string `json:"token_endpoint"`
 
 	// UpdatedAt is read only field.
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
 type UpstreamRegistryAccessConfig struct {
@@ -35,21 +35,21 @@ type UpstreamRegistryAccessConfig struct {
 	MaxConnections             int       `json:"max_connections"`
 	MaxRetries                 int       `json:"max_retries"`
 	RetryDelayInSeconds        int       `json:"retry_delay"`
-	UpdatedAt                  time.Time `json:"updated_at"`
+	UpdatedAt                  *time.Time `json:"updated_at"`
 }
 
 type UpstreamRegistryStorageConfig struct {
 	StorageLimitInMbs float32   `json:"storage_limit"`
 	CleanupPolicy     string    `json:"cleanup_policy"`
 	CleanupThreshold  float32   `json:"cleanup_threshold"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	UpdatedAt         *time.Time `json:"updated_at"`
 }
 
 type UpstreamRegistryCacheConfig struct {
 	Enabled      bool      `json:"enabled"`
 	TtlInSeconds int       `json:"ttl_seconds"`
 	OfflineMode  bool      `json:"offline_mode"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	UpdatedAt    *time.Time `json:"updated_at"`
 }
 
 type UpstreamRegistrySummary struct {

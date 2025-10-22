@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/ksankeerth/open-image-registry/types/models"
+	"github.com/ksankeerth/open-image-registry/types/query"
 )
 
 // Transactional defines the ability to execute queries inside transactions.
@@ -119,4 +120,90 @@ type ImageRegistryDAO interface {
 	UpdateManifestIdForTag(tagId string, newManifestId string, txKey string) error
 
 	GetLinkedManifestByTagId(tagId string, txKey string) (manifestId string, err error)
+}
+
+type UserDAO interface {
+	Transactional
+
+	CreateUserAccount(username, email, displayName, password, salt string, txkey string) (id string, err error)
+
+	DeleteUserAccount(userId string, txkey string) (deleted bool, err error)
+
+	UpdateUserAccount(userId, email, displayName string, txKey string) error
+
+	UpdateUserEmail(userId, newEmail string, txKey string) (updated bool, err error)
+
+	UpdateUserDisplayName(userId, displayName string, txKey string) (updated bool, err error)
+
+	LockUserAccount(username string, lockedReason int, txKey string) (locked bool, err error)
+
+	UnlockUserAccount(username string, txKey string) (unlocked bool, err error)
+
+	RecordFailedAttempt(username string, txKey string) error
+
+	ValidateUsernameAndEmail(username, email string, txKey string) (usernameAvail, emailAvail bool, err error)
+
+	GetUserAccount(username string, txKey string) (*models.UserAccount, error)
+
+	GetUsernameById(userId string, txKey string) (string, error)
+
+	GetUserAccountById(userId string, txKey string) (*models.UserAccount, error)
+
+	GetUserPasswordAndSaltById(userId string, txKey string) (password, salt string, err error)
+
+	UpdateUserPasswordAndSalt(userId, password, salt string, txKey string) (updated bool, err error)
+
+	ListUserAccounts(conditions *query.ListModelsConditions, txKey string) (users []*models.UserAccountView, total int, err error)
+
+	CountUserAccounts(txKey string) (total int, err error)
+
+	PersistPasswordRecovery(userId, recoveryUuid string, reasonType int, txkey string) error
+
+	RetrivePasswordRecovery(userId string, txKey string) (*models.PasswordRecovery, error)
+
+	DeletePasswordRecovery(userId string, txKey string) (deleted bool, err error)
+
+	// PersistUserRole(roleName, txKey string) error
+
+	// DeleteUserRole(roleName string, txKey string) (deleted bool, err error)
+
+	AssignUserRole(roleName, userId string, txKey string) error
+
+	RemoveUserRoleAssignment(userId string, txKey string) error
+
+	IsUserAssignedToRole(userId, roleName string, txKey string) (bool, error)
+
+	GetUserRole(userId string, txKey string) (roleName string, err error)
+}
+
+type ResourceAccessDAO interface {
+	Transactional
+
+	GrantAccess(resourceType, resourceId, userId, accessLevel, grantedBy string, txKey string) (granted bool, err error)
+
+	RevokeAccess(resourceId, userId, resourceType string, txKey string) (revoked bool, err error)
+
+	GetUserAccess(resourceType, userId string, txKey string) ([]*models.ResourceAccess, error)
+
+	GetUserNamespaceAccess(userId string, txKey string) ([]*models.NamespaceAccess, error)
+
+	GetUserRepositoryAccess(userId string, txKey string) ([]*models.RepositoryAccess, error)
+}
+
+type OAuthDAO interface {
+	PersistScope(scopeName, description string, txKey string) error
+
+	PersistScopeRoleBinding(scopeName, roleName string, txKey string) error
+
+	GetAllScopeRoleBindings() ([]*models.ScopeRoleBinding, error)
+
+	PersistAuthSession(session *models.OAuthSession, txKey string) error
+
+	PersistAuthSessionScopeBinding(scopes []string, sessionId string, txKey string) error
+
+	RemoveAuthSession(sessionId string, txKey string) error
+
+	GetAuthSession(scopeHash, userId string, txKey string) (*models.OAuthSession, error)
+
+	UpdateSessionLastAccess(sesssionId string, lastAccessed time.Time, txKey string) error
 }
