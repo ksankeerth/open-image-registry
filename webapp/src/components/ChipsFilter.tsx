@@ -1,4 +1,4 @@
-import { Checkbox } from "primereact/checkbox";
+import { Checkbox, CheckboxChangeEvent } from "primereact/checkbox";
 import { Chip } from "primereact/chip";
 import { OverlayPanel } from "primereact/overlaypanel";
 import React, { useRef, useState } from "react";
@@ -10,6 +10,7 @@ export type ChipFilterOption = {
 
 export type ChipFilterProps = {
   filterOptions: ChipFilterOption[];
+  handleFilterChange: (options: string[]) => void;
 };
 
 const ChipsFilter = (props: ChipFilterProps) => {
@@ -18,6 +19,26 @@ const ChipsFilter = (props: ChipFilterProps) => {
   const [selectedOptions, setSelectedOptions] = useState<Set<string>>(
     new Set(props.filterOptions.map((op) => op.value))
   );
+
+  const handleFilterChange = (e: CheckboxChangeEvent) => {
+    if (e.checked) {
+      setSelectedOptions((current) => {
+        const newSet = new Set(current);
+        newSet.add(e.value);
+        props.handleFilterChange(Array.from(newSet))
+        return newSet;
+      });
+    } else {
+      setSelectedOptions((current) => {
+        const newSet = new Set(current);
+        newSet.delete(e.value);
+        props.handleFilterChange(Array.from(newSet))
+        return newSet;
+      });
+    }
+
+
+  }
 
   return (
     <React.Fragment>
@@ -65,21 +86,7 @@ const ChipsFilter = (props: ChipFilterProps) => {
                 <Checkbox
                   value={node.value}
                   checked={selectedOptions.has(node.value)}
-                  onChange={(e) => {
-                    if (e.checked) {
-                      setSelectedOptions((current) => {
-                        const newSet = new Set(current);
-                        newSet.add(e.value);
-                        return newSet;
-                      });
-                    } else {
-                      setSelectedOptions((current) => {
-                        const newSet = new Set(current);
-                        newSet.delete(e.value);
-                        return newSet;
-                      });
-                    }
-                  }}
+                  onChange={handleFilterChange}
                 />
                 <div>{node.label}</div>
               </div>
