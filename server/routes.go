@@ -10,11 +10,18 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/httplog/v2"
+	"github.com/ksankeerth/open-image-registry/auth"
+	"github.com/ksankeerth/open-image-registry/config"
 	"github.com/ksankeerth/open-image-registry/log"
 	"github.com/ksankeerth/open-image-registry/upstream"
+	"github.com/ksankeerth/open-image-registry/user"
 )
 
-func AppRouter(uiBuildPath string, upstreamHandler *upstream.UpstreamRegistryHandler) *chi.Mux {
+func AppRouter(webappConfig *config.WebAppConfig,
+	upstreamHandler *upstream.UpstreamRegistryHandler,
+	authHandler *auth.AuthAPIHandler,
+	userHandler *user.UserAPIHandler,
+) *chi.Mux {
 	router := chi.NewRouter()
 
 	// Middleware setup
@@ -36,13 +43,19 @@ func AppRouter(uiBuildPath string, upstreamHandler *upstream.UpstreamRegistryHan
 	// API routes
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Mount("/upstreams", upstreamHandler.Routes())
+		r.Mount("/users", userHandler.Routes())
+		r.Mount("/auth", authHandler.Routes())
 		// Add other API routes here
 	})
 
+	if !webappConfig.EnableUI {
+		return router
+	}
+
 	// WebUI
-	absUiBuildPath, err := filepath.Abs(uiBuildPath)
+	absUiBuildPath, err := filepath.Abs(webappConfig.DistPath)
 	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Unable to get the abousolute path for : %s", uiBuildPath)
+		log.Logger().Error().Err(err).Msgf("Unable to get the abousolute path for : %s", webappConfig.DistPath)
 		panic(err.Error())
 	}
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
@@ -53,7 +66,7 @@ func AppRouter(uiBuildPath string, upstreamHandler *upstream.UpstreamRegistryHan
 		}
 
 		cleanPath := filepath.Clean(r.URL.Path)
-		requestedPath := filepath.Join(uiBuildPath, cleanPath)
+		requestedPath := filepath.Join(webappConfig.DistPath, cleanPath)
 
 		absRequestedPath, err := filepath.Abs(requestedPath)
 		if err != nil {
@@ -62,7 +75,7 @@ func AppRouter(uiBuildPath string, upstreamHandler *upstream.UpstreamRegistryHan
 			return
 		}
 		if absRequestedPath == absUiBuildPath {
-			http.ServeFile(w, r, filepath.Join(uiBuildPath, "index.html"))
+			http.ServeFile(w, r, filepath.Join(webappConfig.DistPath, "index.html"))
 			return
 		}
 
@@ -77,7 +90,7 @@ func AppRouter(uiBuildPath string, upstreamHandler *upstream.UpstreamRegistryHan
 		_, err = os.Stat(absRequestedPath)
 		if os.IsNotExist(err) {
 			// fallback to index.html for SPA routes
-			http.ServeFile(w, r, filepath.Join(uiBuildPath, "index.html"))
+			http.ServeFile(w, r, filepath.Join(webappConfig.DistPath, "index.html"))
 			return
 		}
 		if err != nil {
