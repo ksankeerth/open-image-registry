@@ -1,3 +1,5 @@
+import { UserAccountInfo, UserProfileInfo } from "./app_types";
+
 export type UpstreamOCIRegEntity = {
   id?: string;
   name: string;
@@ -167,3 +169,60 @@ export type ImagesTreeData = {
     };
   }[];
 };
+
+export type AuthLoginRequest = {
+  username: string;
+  password: string;
+  scopes: string[];
+};
+
+export type AuthLoginResponse = {
+  success: boolean;
+  error_message: string;
+  session_id: string;
+  authorized_scopes: string[];
+  expires_at: Date;
+  user: UserProfileInfo;
+};
+
+export type CreateUserAccountRequest = {
+  username: string;
+  email: string;
+  display_name: string;
+  role: string;
+};
+
+export type CreateUserAccountResponse = {
+  username: string;
+  user_id: string;
+  error?: string;
+};
+
+export type UsernameEmailValidationRequest = {
+  username: string;
+  email: string;
+};
+
+export type UsernameEmailValidationResponse = {
+  username_available: boolean;
+  email_available: boolean;
+  error?: string;
+};
+
+export type ListUsersResponse = {
+  total: number;
+  page: number;
+  limit: number;
+  users: UserAccountInfo[];
+  error?: string
+}
+
+export type UpdateUserAccountRequest = {
+  email: string;
+  role: string;
+  display_name: string;
+}
+
+export type UpdateUserAccountResponse = {
+  error?: string;
+}
