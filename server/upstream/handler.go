@@ -183,7 +183,7 @@ func (h *UpstreamRegistryHandler) GetUpstreamRegistry(w http.ResponseWriter, r *
 				OfflineMode:  cache.OfflineMode,
 			},
 			CreatedAt: reg.CreatedAt,
-			UpdatedAt: cache.UpdatedAt,
+			UpdatedAt: *cache.UpdatedAt,
 		},
 	}
 

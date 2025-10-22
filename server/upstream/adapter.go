@@ -11,13 +11,14 @@ type UpstreamAdapter struct{}
 
 // ToUpstreamEntity converts CreateUpstreamRegistryRequest DTO → UpstreamRegistryEntity (model)
 func (ua *UpstreamAdapter) ToUpstreamEntity(req *mgmt.CreateUpstreamRegistryRequest) *models.UpstreamRegistryEntity {
+	updated := time.Now()
 	model := &models.UpstreamRegistryEntity{
 		Name:        req.Name,
 		Port:        req.Port,
 		Status:      req.Status,
 		UpstreamUrl: req.UpstreamUrl,
 		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		UpdatedAt:   &updated,
 	}
 
 	if model.Status == "" {
@@ -28,16 +29,19 @@ func (ua *UpstreamAdapter) ToUpstreamEntity(req *mgmt.CreateUpstreamRegistryRequ
 
 // ToUpstreamAuthConfig converts CreateUpstreamRegistryRequest.AuthConfig DTO → UpstreamRegistryAuthConfig (model)
 func (ua *UpstreamAdapter) ToUpstreamAuthConfig(req *mgmt.CreateUpstreamRegistryRequest) *models.UpstreamRegistryAuthConfig {
+	updatedAt := time.Now()
 	return &models.UpstreamRegistryAuthConfig{
 		AuthType:       req.AuthConfig.AuthType,
 		CredentialJson: req.AuthConfig.CredentialJson,
 		TokenEndpoint:  req.AuthConfig.TokenEndpoint,
-		UpdatedAt:      time.Now(),
+		UpdatedAt:      &updatedAt,
 	}
 }
 
 // ToUpstreamAccessConfig converts DTO → model
 func (ua *UpstreamAdapter) ToUpstreamAccessConfig(req *mgmt.CreateUpstreamRegistryRequest) *models.UpstreamRegistryAccessConfig {
+	updatedAt := time.Now()
+
 	return &models.UpstreamRegistryAccessConfig{
 		ProxyEnabled:               req.AccessConfig.ProxyEnabled,
 		ProxyUrl:                   req.AccessConfig.ProxyUrl,
@@ -46,27 +50,30 @@ func (ua *UpstreamAdapter) ToUpstreamAccessConfig(req *mgmt.CreateUpstreamRegist
 		MaxConnections:             req.AccessConfig.MaxConnections,
 		MaxRetries:                 req.AccessConfig.MaxRetries,
 		RetryDelayInSeconds:        req.AccessConfig.RetryDelayInSeconds,
-		UpdatedAt:                  time.Now(),
+		UpdatedAt:                  &updatedAt,
 	}
 }
 
 // ToUpstreamStorageConfig converts DTO → model
 func (ua *UpstreamAdapter) ToUpstreamStorageConfig(req *mgmt.CreateUpstreamRegistryRequest) *models.UpstreamRegistryStorageConfig {
+	updatedAt := time.Now()
 	return &models.UpstreamRegistryStorageConfig{
 		StorageLimitInMbs: req.StorageConfig.StorageLimitInMbs,
 		CleanupPolicy:     req.StorageConfig.CleanupPolicy,
 		CleanupThreshold:  req.StorageConfig.CleanupThreshold,
-		UpdatedAt:         time.Now(),
+		UpdatedAt:         &updatedAt,
 	}
 }
 
 // ToUpstreamCacheConfig converts DTO → model
 func (ua *UpstreamAdapter) ToUpstreamCacheConfig(req *mgmt.CreateUpstreamRegistryRequest) *models.UpstreamRegistryCacheConfig {
+	updatedAt := time.Now()
+
 	return &models.UpstreamRegistryCacheConfig{
 		Enabled:      req.CacheConfig.Enabled,
 		TtlInSeconds: req.CacheConfig.TtlInSeconds,
 		OfflineMode:  req.CacheConfig.OfflineMode,
-		UpdatedAt:    time.Now(),
+		UpdatedAt:    &updatedAt,
 	}
 }
 
