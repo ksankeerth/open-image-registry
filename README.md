@@ -1,6 +1,5 @@
 ### Open Image Registry
 
-
 <img src="docs/assets/logo.png" width="150" height="150" alt="Logo">
 
 A powerful, open-source Docker image registry with an intuitive web interface, built for scalability and simplicity. Host, proxy, and cache Docker images all in one place.
@@ -70,5 +69,11 @@ Open Image Registry is designed to scale horizontally:
 
 ## Contributing
 
-We're actively developing Open Image Registry and welcome contributions! 
+We're actively developing Open Image Registry and welcome contributions!
 
+## Documenation
+
+Since the project is currently under development, many features may change quickly.
+We have some guides which will supports how the features will evoles. You can refer to guides below.
+
+- [User Management](./docs/user-management.md)
