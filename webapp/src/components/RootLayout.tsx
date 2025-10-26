@@ -7,7 +7,7 @@ import ImagesView from "./ImagesView";
 import LogoComponent from "./LogoComponent";
 import { ToastProvider } from "./ToastComponent";
 import LoginPage from "../pages/LoginPage";
-import AdminPanelComponent from "./AdminPanel";
+import AdminPanelComponent from "../pages/RegistryConsolePage";
 import NewAccountSetupPage from "../pages/NewAccountSetupPage";
 
 const RootLayout = () => {
@@ -33,6 +33,12 @@ const RootLayout = () => {
     localStorage.removeItem("authenticated");
     navigate("/login");
   };
+
+  const navigateToManagementConsole = () => {
+    navigate("/console")
+  }
+
+
 
   return (
     <ToastProvider>
@@ -75,9 +81,9 @@ const RootLayout = () => {
                   style={{ fontSize: "1.2rem" }}
                 ></span>
                 <span
-                  className="pi pi-cog text-teal-700 cursor-pointer"
+                  className="pi pi-objects-column text-teal-700 cursor-pointer"
                   style={{ fontSize: "1.2rem" }}
-                  onClick={() => setShowAdminPanel(true)}
+                  onClick={navigateToManagementConsole}
                 ></span>
                 <span
                   className="pi pi-sign-out text-teal-700 cursor-pointer"
@@ -100,11 +106,6 @@ const RootLayout = () => {
           <ImagesView
             visible={showImagesModal}
             hideCallback={setShowImagesModal}
-          />
-          {/* For Settings View */}
-          <AdminPanelComponent
-            visible={showAdminPanel}
-            hideCallback={(hide) => setShowAdminPanel(!hide)}
           />
         </div>
       )}
