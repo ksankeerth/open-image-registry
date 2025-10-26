@@ -1,22 +1,18 @@
 import { Sidebar } from "primereact/sidebar";
 import React, { useEffect, useRef, useState } from "react";
-import LogoComponent from "./LogoComponent";
+import LogoComponent from "../components/LogoComponent";
 import { Button } from "primereact/button";
 import { Divider } from "primereact/divider";
-import AdminPanelMenuList, { MenuItem } from "./AdminPanelMenu";
-import UserAdministrationComponent from "./UserAdministration";
 import { BreadCrumb } from "primereact/breadcrumb";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import SideMenuList, { MenuItem } from "../components/SideMenu";
 
-export type AdminPanelProps = {
-  visible: boolean;
-  hideCallback: React.Dispatch<React.SetStateAction<boolean>>;
-};
 
 const menus: MenuItem[] = [
   {
     name: "USER MANAGEMENT",
     key: "user-management",
-    nav_link: "/administration/user-management",
+    nav_link: "/console/user-management",
     description: "Manage users, invitations, and monitor user activity",
     icon_class: "pi-users",
     collapsed: true,
@@ -24,21 +20,21 @@ const menus: MenuItem[] = [
       {
         name: "Users",
         key: "users",
-        nav_link: "/administration/user-management/users",
+        nav_link: "/console/user-management/users",
         description: "Manage user accounts, roles, and permissions",
         children: [],
       },
       {
         name: "Invitations",
         key: "invitations",
-        nav_link: "/administration/user-management/invitations",
+        nav_link: "/console/user-management/invitations",
         description: "Send and manage user invitations to the registry",
         children: [],
       },
       {
         name: "Activity Log",
         key: "activity-log",
-        nav_link: "/administration/user-management/activity-log",
+        nav_link: "/console/user-management/activity-log",
         description: "View system activity, user actions, and audit logs",
         children: [],
       },
@@ -47,28 +43,28 @@ const menus: MenuItem[] = [
   {
     name: "ACCESS MANAGEMENT",
     key: "access-management",
-    nav_link: "/administration/access-management",
+    nav_link: "/console/access-management",
     description: "Configure namespaces, repositories, and upstream registries",
     icon_class: "pi-shield",
     children: [
       {
         name: "Namespaces",
         key: "namespaces",
-        nav_link: "/administration/access-management/namespaces",
+        nav_link: "/console/access-management/namespaces",
         description: "Organize and manage namespaces for your repositories",
         children: [],
       },
       {
         name: "Repositories",
         key: "repositories",
-        nav_link: "/administration/access-management/repositories",
+        nav_link: "/console/access-management/repositories",
         description: "Configure and manage image repositories",
         children: [],
       },
       {
         name: "Upstreams",
         key: "upstreams",
-        nav_link: "/administration/access-management/upstreams",
+        nav_link: "/console/access-management/upstreams",
         description:
           "Configure upstream registry connections for proxy caching",
         children: [],
@@ -78,21 +74,21 @@ const menus: MenuItem[] = [
   {
     name: "INTEGRATION",
     key: "integration",
-    nav_link: "/administration/integration",
+    nav_link: "/console/integration",
     description: "Configure authentication providers and external integrations",
     icon_class: "pi-ticket",
     children: [
       {
         name: "LDAP",
         key: "ldap",
-        nav_link: "/administration/ldap",
+        nav_link: "/console/integration/ldap",
         description: "Configure LDAP authentication and user synchronization",
         children: [],
       },
       {
         name: "SSO",
         key: "sso",
-        nav_link: "/administration/sso",
+        nav_link: "/console/integration/sso",
         description: "Configure Single Sign-On with OAuth2/OIDC providers",
         children: [],
       },
@@ -101,28 +97,28 @@ const menus: MenuItem[] = [
   {
     name: "JOBS",
     key: "jobs",
-    nav_link: "/administration/jobs",
+    nav_link: "/console/jobs",
     description: "Schedule and monitor automated maintenance tasks",
     icon_class: "pi-objects-column",
     children: [
       {
         name: "Cache Cleanup",
         key: "cache-cleanup",
-        nav_link: "/administration/jobs/cache-cleanup",
+        nav_link: "/console/jobs/cache-cleanup",
         description: "Configure and schedule cache cleanup jobs",
         children: [],
       },
       {
         name: "Storage Cleanup",
         key: "storage-cleanup",
-        nav_link: "/administration/jobs/storage-cleanup",
+        nav_link: "/console/jobs/storage-cleanup",
         description: "Configure and schedule storage cleanup jobs",
         children: [],
       },
       {
         name: "Manual Jobs",
         key: "manual-jobs",
-        nav_link: "/administration/jobs/manual",
+        nav_link: "/console/jobs/manual",
         description: "Run and monitor manual maintenance jobs",
         children: [],
       },
@@ -131,35 +127,35 @@ const menus: MenuItem[] = [
   {
     name: "ANALYTICS",
     key: "analytics",
-    nav_link: "/administration/analytics",
+    nav_link: "/console/analytics",
     description: "Monitor system performance, usage, and health metrics",
     icon_class: "pi-wave-pulse",
     children: [
       {
         name: "Storage",
         key: "storage-analytics",
-        nav_link: "/administration/analytics/storage",
+        nav_link: "/console/analytics/storage",
         description: "View storage usage statistics and trends",
         children: [],
       },
       {
         name: "Cache",
         key: "cache-analytics",
-        nav_link: "/administration/analytics/cache",
+        nav_link: "/console/analytics/cache",
         description: "View cache hit rates and performance metrics",
         children: [],
       },
       {
         name: "Errors",
         key: "errors-analytics",
-        nav_link: "/administration/analytics/errors",
+        nav_link: "/console/analytics/errors",
         description: "Monitor and analyze system errors and failures",
         children: [],
       },
       {
         name: "Garbage Collection",
         key: "garbage-collection",
-        nav_link: "/administration/analytics/garbage-collection",
+        nav_link: "/console/analytics/garbage-collection",
         description: "View garbage collection status and history",
         children: [],
       },
@@ -167,19 +163,86 @@ const menus: MenuItem[] = [
   },
 ];
 
-const AdminPanelComponent = (props: AdminPanelProps) => {
-  const handleClickBack = (hide: boolean) => {
-    if (hide) {
-      const timer = setTimeout(() => {
-        props.hideCallback(true);
-      }, 200);
-      return () => clearTimeout(timer);
-    }
-  };
+const breadcrumbMap: Record<string, string> = {
+  "/console": "Registry Console",
 
-  const [selectedMenu, setSelectedMenu] = useState<string>(
-    menus[0].children[0].key
-  );
+  // USER MANAGEMENT
+  "/console/user-management": "User Management",
+  "/console/user-management/users": "Users",
+  "/console/user-management/invitations": "Invitations",
+  "/console/user-management/activity-log": "Activity Log",
+
+  // ACCESS MANAGEMENT
+  "/console/access-management": "Access Management",
+  "/console/access-management/namespaces": "Namespaces",
+  "/console/access-management/repositories": "Repositories",
+  "/console/access-management/upstreams": "Upstreams",
+
+  // INTEGRATION
+  "/console/integration": "Integration",
+  "/console/integration/ldap": "LDAP",
+  "/console/integration/sso": "SSO",
+
+  // JOBS
+  "/console/jobs": "Jobs",
+  "/console/jobs/cache-cleanup": "Cache Cleanup",
+  "/console/jobs/storage-cleanup": "Storage Cleanup",
+  "/console/jobs/manual": "Manual Jobs",
+
+  // ANALYTICS
+  "/console/analytics": "Analytics",
+  "/console/analytics/storage": "Storage Analytics",
+  "/console/analytics/cache": "Cache Analytics",
+  "/console/analytics/errors": "Error Analytics",
+  "/console/analytics/garbage-collection": "Garbage Collection",
+};
+
+const RegistryConsolePage = () => {
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const [visible, setVisible] = useState<boolean>(false);
+
+  const [breadcrumpState, setBreadcrumpState] = useState<{ label: string }[]>([])
+
+  useEffect(() => {
+    if (location.pathname.startsWith("/console")) {
+      setVisible(true)
+    } else {
+      setVisible(false);
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (location.pathname == "/console") {
+      navigate("/console/user-management/users")
+    }
+  }, [location.pathname])
+
+  useEffect(() => {
+    const segments = location.pathname.split("/").filter(Boolean);
+
+    let accumulatedPath = "";
+    const crumbs: { label: string; path: string }[] = [];
+
+    segments.forEach((segment) => {
+      accumulatedPath += `/${segment}`;
+      const label = breadcrumbMap[accumulatedPath];
+      if (label) {
+        crumbs.push({ label, path: accumulatedPath });
+      }
+    });
+
+    setBreadcrumpState(crumbs);
+  }, [location.pathname]);
+
+  const handleClickHome = () => {
+    navigate("/");
+    setTimeout(() => {
+      setVisible(false);
+    }, 150)
+  }
 
   const refDivider = useRef<Divider>(null);
   const [scrollHeight, setScrollHeight] = useState<number>(0);
@@ -223,8 +286,8 @@ const AdminPanelComponent = (props: AdminPanelProps) => {
   return (
     <Sidebar
       position="left"
-      visible={props.visible}
-      onHide={() => props.hideCallback(false)}
+      visible={visible}
+      onHide={handleClickHome}
       showCloseIcon={false}
       header={
         <div className="flex flex-column w-full pt-2 m-0">
@@ -233,18 +296,18 @@ const AdminPanelComponent = (props: AdminPanelProps) => {
               <LogoComponent showNameInOneLine={false} />
             </div>
             <div className="flex-grow-1 flex justify-content-center align-items-center font-semibold text-lg">
-              Control Panel
+              Registry Console
             </div>
             <div className="flex align-items-center pr-3">
               <Button
                 className="border-round-3xl border-1"
                 outlined
                 size="small"
-                onClick={() => props.hideCallback(true)}
+                onClick={handleClickHome}
               >
                 <span className="pi pi-chevron-left"></span>
                 &nbsp;&nbsp;
-                <span>Back</span>
+                <span>Home</span>
               </Button>
             </div>
           </div>
@@ -262,16 +325,15 @@ const AdminPanelComponent = (props: AdminPanelProps) => {
             style={
               scrollHeight
                 ? {
-                    overflowY: "auto",
-                    maxHeight: `${scrollHeight * 0.9}px`,
-                  }
+                  overflowY: "auto",
+                  maxHeight: `${scrollHeight * 0.9}px`,
+                }
                 : {}
             }
           >
-            <AdminPanelMenuList
+            <SideMenuList
               menus={menus}
-              selectMenu={(menuKey) => setSelectedMenu(menuKey)}
-              selectedMenuKey={selectedMenu}
+              selectedMenuKey={menus[0].children[0].key}
               menuCollapsed={menuCollapsed}
             />
           </div>
@@ -292,16 +354,16 @@ const AdminPanelComponent = (props: AdminPanelProps) => {
           style={
             scrollHeight
               ? {
-                  overflowY: "auto",
-                  maxHeight: `${scrollHeight}px`,
-                }
+                overflowY: "auto",
+                maxHeight: `${scrollHeight}px`,
+              }
               : {}
           }
         >
           <div>
             <BreadCrumb
               model={[
-                { label: "Admin Panel" },
+                { label: "Registry Console" },
                 { label: "User Management" },
                 { label: "Users" },
               ]}
@@ -309,7 +371,7 @@ const AdminPanelComponent = (props: AdminPanelProps) => {
             />
           </div>
           <div className="w-full h-full">
-            {selectedMenu == "users" && <UserAdministrationComponent />}
+            <Outlet />
           </div>
         </div>
       </div>
@@ -317,4 +379,4 @@ const AdminPanelComponent = (props: AdminPanelProps) => {
   );
 };
 
-export default AdminPanelComponent;
+export default RegistryConsolePage;

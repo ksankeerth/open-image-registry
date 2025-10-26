@@ -1,6 +1,7 @@
 import { Divider } from "primereact/divider";
 import { classNames } from "primereact/utils";
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 export type MenuItem = {
   name: string;
@@ -12,16 +13,21 @@ export type MenuItem = {
   children: MenuItem[];
 };
 
-export type AdminPanelMenuProps = {
+export type SideMenuProps = {
   menus: MenuItem[];
-  selectMenu: (menu_key: string) => void;
   selectedMenuKey: string;
   menuCollapsed: () => void;
 };
 
-const AdminPanelMenuList = (props: AdminPanelMenuProps) => {
+const SideMenuList = (props: SideMenuProps) => {
   //This object will track collapsed state of menus
   const [menuState, setMenuState] = useState<{ [key: string]: boolean }>({});
+
+  const navigate = useNavigate();
+
+  const handleMenuClick = (link: string) => {
+    navigate(link);
+  }
 
   const handleMenuCollapse = (menu: string) => {
     setMenuState((current) => {
@@ -66,7 +72,7 @@ const AdminPanelMenuList = (props: AdminPanelMenuProps) => {
                       ? "grid grid-nogutter pt-2 pb-2 cursor-pointer surface-100"
                       : "grid grid-nogutter pt-2 pb-2 cursor-pointer hover:surface-50"
                   }
-                  onClick={() => props.selectMenu(submenu.key)}
+                  onClick={() => handleMenuClick(submenu.nav_link)}
                 >
                   <div className="col-1"> </div>
                   <div className="col-10">{submenu.name}</div>
@@ -84,4 +90,4 @@ const AdminPanelMenuList = (props: AdminPanelMenuProps) => {
   );
 };
 
-export default AdminPanelMenuList;
+export default SideMenuList;

@@ -5,6 +5,8 @@ import HomePage from "./pages/HomePage";
 import RepositoryViewPage from "./pages/RepositoryViewPage";
 import LoginPage from "./pages/LoginPage";
 import NewAccountSetupPage from "./pages/NewAccountSetupPage";
+import UserAdministrationComponent from "./components/UserAdministration";
+import RegistryConsolePage from "./pages/RegistryConsolePage";
 
 const AppRouter = createBrowserRouter([
   {
@@ -27,6 +29,17 @@ const AppRouter = createBrowserRouter([
             path: "",
             element: <HomePage />,
             index: true,
+          },
+          {
+            path: "/console",
+            element: <RegistryConsolePage />,
+            children: [
+              {
+                path: "/console/user-management/users",
+                element: <UserAdministrationComponent />
+
+              },
+            ],
           },
           {
             path: "/repository/:repository_name",
