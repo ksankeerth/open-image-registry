@@ -9,6 +9,7 @@ export type ChipFilterOption = {
 };
 
 export type ChipFilterProps = {
+  maxChipsPerRow?: number;
   filterOptions: ChipFilterOption[];
   handleFilterChange: (options: string[]) => void;
 };
@@ -64,20 +65,47 @@ const ChipsFilter = (props: ChipFilterProps) => {
             onClick={() => setShowOptions((c) => !c)}
           />
         )}
+        <div className="flex flex-column">
+          {selectedOptions.size !== 0 &&
+            props.maxChipsPerRow &&
+            Array.from({ length: Math.ceil(selectedOptions.size / props.maxChipsPerRow) }).map((_, i) => {
+              const optionsArray = Array.from(selectedOptions);
+              const start = i * (props.maxChipsPerRow as number);
+              const end = (i + 1) * (props.maxChipsPerRow as number);
+              const rowItems = optionsArray.slice(start, end);
 
-        <div className="flex ">
-          {selectedOptions.size != 0 &&
-            Array.from(selectedOptions).map((value: string) => {
               return (
-                <Chip
-                  className="m-1 text-xs"
-                  label={
-                    props.filterOptions.find((op) => op.value == value)?.label
-                  }
-                />
+                <div className="flex flex-row" key={i}>
+                  {rowItems.map((value: string) => {
+                    const label = props.filterOptions.find((op) => op.value === value)?.label;
+                    return (
+                      <Chip
+                        key={value}
+                        className="m-1 text-xs"
+                        label={label}
+                      />
+                    );
+                  })}
+                </div>
               );
             })}
         </div>
+
+        {selectedOptions.size !== 0 && !props.maxChipsPerRow && (
+          <div className="flex">
+            {Array.from(selectedOptions).map((value: string) => {
+              const label = props.filterOptions.find((op) => op.value === value)?.label;
+              return (
+                <Chip
+                  key={value}
+                  className="m-1 text-xs"
+                  label={label}
+                />
+              );
+            })}
+          </div>
+        )}
+
 
         <OverlayPanel ref={opRef} className="p-0 m-0">
           <div className="flex flex-column text-xs">
@@ -94,7 +122,7 @@ const ChipsFilter = (props: ChipFilterProps) => {
           </div>
         </OverlayPanel>
       </div>
-    </React.Fragment>
+    </React.Fragment >
   );
 };
 
