@@ -1,5 +1,6 @@
 import { TableFilterSearchPaginationSortState, UserAccountInfo } from "../types/app_types";
 import {
+  AccountSetupCompleteRequest,
   AuthLoginRequest,
   AuthLoginResponse,
   CreateUserAccountRequest,
@@ -10,6 +11,7 @@ import {
   PostUpstreamResponseBody,
   UpdateUserAccountRequest,
   UpdateUserAccountResponse,
+  UserAccountSetupInfoResponse,
   UsernameEmailValidationRequest,
   UsernameEmailValidationResponse,
 } from "../types/request_response";
@@ -23,7 +25,7 @@ export default class HttpClient {
     this.baseUrl = baseUrl;
   }
 
-  public static getInstance(baseUrl: string): HttpClient {
+  public static getInstance(baseUrl: string = "http://localhost:8000/api/v1"): HttpClient {
     if (!HttpClient.instance) {
       HttpClient.instance = new HttpClient(baseUrl);
     }
@@ -303,6 +305,61 @@ export default class HttpClient {
       return {
         error: "Unexpected error occured! Please try again.",
       };
+    }
+  }
+
+  public async getAccountSetupInfo(uuid: string): Promise<UserAccountSetupInfoResponse> {
+    try {
+      const response = await fetch(`${this.baseUrl}/users/account-setup/${uuid}`, {
+        method: "GET",
+        headers: {
+        }
+      });
+
+      const body = await response.json();
+
+      if (response.status == 404) {
+        return body as UserAccountSetupInfoResponse
+      }
+
+      if (response.status == 200) {
+        return body as UserAccountSetupInfoResponse;
+      }
+      if (response.status == 500) {
+        return { error_message: "Unexpected error occurred! Please contact administrator." } as UserAccountSetupInfoResponse
+      }
+      return {
+        error_message: "Unexpected error occured! Please try again.",
+      } as UserAccountSetupInfoResponse;
+    } catch (err) {
+      console.log(err);
+      return {
+        error_message: "Unexpected error occured! Please try again.",
+      } as UserAccountSetupInfoResponse;
+    }
+  }
+
+  public async completeAccountSetup(
+    request: AccountSetupCompleteRequest
+  ): Promise<{ error_message?: string }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/users/account-setup/${request.uuid}/complete`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(request),
+      });
+
+
+      if (response.status == 200) {
+        return { error_message: "" };
+      }
+      return { error_message: "Unexpected error occurred! Please try again." };
+
+    } catch (err) {
+      console.log(err);
+      return { error_message: "Unexpected error occurred! Please try again." };
     }
   }
 }

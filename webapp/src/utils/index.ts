@@ -31,3 +31,52 @@ export function validateUsernameWithError(username: string): {
 
   return { isValid: true };
 }
+
+
+export function validatePassword(pw: string): { isValid: boolean; msg: string } {
+  // Length check
+  if (pw.length < 12) {
+    return { isValid: false, msg: "Password must be at least 12 characters long." };
+  }
+
+  if (pw.length > 64) {
+    return { isValid: false, msg: "Password cannot exceed 64 characters." };
+  }
+
+  let hasUpper = false;
+  let hasLower = false;
+  let hasDigit = false;
+  let hasSymbol = false;
+
+  for (const ch of pw) {
+    if (/[A-Z]/.test(ch)) {
+      hasUpper = true;
+    } else if (/[a-z]/.test(ch)) {
+      hasLower = true;
+    } else if (/[0-9]/.test(ch)) {
+      hasDigit = true;
+    } else if (isAllowedSymbol(ch)) {
+      hasSymbol = true;
+    }
+  }
+
+  if (!hasUpper) {
+    return { isValid: false, msg: "Password must contain at least one uppercase letter." };
+  }
+  if (!hasLower) {
+    return { isValid: false, msg: "Password must contain at least one lowercase letter." };
+  }
+  if (!hasDigit) {
+    return { isValid: false, msg: "Password must contain at least one number." };
+  }
+  if (!hasSymbol) {
+    return { isValid: false, msg: "Password must contain at least one symbol (!@#$%^&*)." };
+  }
+
+  return { isValid: true, msg: "" };
+}
+
+function isAllowedSymbol(ch: string): boolean {
+  const symbols = "!@#$%^&*";
+  return symbols.includes(ch);
+}

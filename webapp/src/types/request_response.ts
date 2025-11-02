@@ -226,3 +226,29 @@ export type UpdateUserAccountRequest = {
 export type UpdateUserAccountResponse = {
   error?: string;
 }
+
+export type UserAccountSetupInfoResponse = {
+  error_message: string;
+  username: string;
+  user_id: string;
+  display_name: string;
+  email: string;
+  role: string;
+};
+
+export type PasswordValidationRequest = {
+  password: string;
+};
+
+export type PasswordValidationResponse = {
+  is_valid: boolean;
+  msg: string;
+};
+
+export type AccountSetupCompleteRequest = {
+  user_id: string;
+  username: string;
+  display_name: string;
+  password: string;
+  uuid: string;
+};
