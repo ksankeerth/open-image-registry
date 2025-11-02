@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 const NameRegex = "^[a-zA-Z0-9_-]+$"
@@ -123,4 +124,54 @@ func IsValidUsername(username string) bool {
 
 func IsValidEmail(email string) bool {
 	return emailRegex.Match([]byte(email))
+}
+
+func ValidatePassword(pw string) (bool, string) {
+	// Length check
+	if len(pw) < 12 {
+		return false, "Password must be at least 12 characters long"
+	}
+	if len(pw) > 64 {
+		return false, "Password cannot exceed 64 characters"
+	}
+
+	var hasUpper, hasLower, hasDigit, hasSymbol bool
+
+	for _, ch := range pw {
+		switch {
+		case unicode.IsUpper(ch):
+			hasUpper = true
+		case unicode.IsLower(ch):
+			hasLower = true
+		case unicode.IsDigit(ch):
+			hasDigit = true
+		case isAllowedSymbol(ch):
+			hasSymbol = true
+		}
+	}
+
+	if !hasUpper {
+		return false, "Password must contain at least one uppercase letter"
+	}
+	if !hasLower {
+		return false, "Password must contain at least one lowercase letter"
+	}
+	if !hasDigit {
+		return false, "Password must contain at least one number"
+	}
+	if !hasSymbol {
+		return false, "Password must contain at least one symbol (!@#$%^&*)"
+	}
+
+	return true, ""
+}
+
+func isAllowedSymbol(ch rune) bool {
+	symbols := "!@#$%^&*"
+	for _, s := range symbols {
+		if ch == s {
+			return true
+		}
+	}
+	return false
 }

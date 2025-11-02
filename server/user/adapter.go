@@ -6,6 +6,9 @@ import (
 	"github.com/ksankeerth/open-image-registry/types/models"
 )
 
+// TODO: Several methods in this package are exported unnecessarily.
+// Review visibility and unexport methods that don't need to be accessed by other packages.
+
 type UserAdapter struct{}
 
 // Converts CreateUserAccountRequest → UserAccount entity
@@ -161,4 +164,15 @@ func (ua *UserAdapter) ToNamespaceAccessSlice(slice []*models.NamespaceAccess) [
 	}
 
 	return results
+}
+
+func (ua *UserAdapter) toUserAccountSetupVerficationResponse(result *accountSetupVerficationResult) *mgmt.UserAccountSetupInfoResponse {
+	var response mgmt.UserAccountSetupInfoResponse
+	response.DisplayName = result.displayName
+	response.Email = result.email
+	response.ErrorMessage = result.errorMsg
+	response.Role = result.role
+	response.UserId = result.userId
+	response.Username = result.username
+	return &response
 }

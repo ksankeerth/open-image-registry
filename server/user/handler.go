@@ -11,6 +11,7 @@ import (
 	"github.com/ksankeerth/open-image-registry/lib"
 	"github.com/ksankeerth/open-image-registry/log"
 	"github.com/ksankeerth/open-image-registry/types/api/v1alpha/mgmt"
+	"github.com/ksankeerth/open-image-registry/utils"
 )
 
 type UserAPIHandler struct {
@@ -172,6 +173,31 @@ func (h *UserAPIHandler) ValidateUser(w http.ResponseWriter, r *http.Request) {
 		log.Logger().Error().Err(err).Msg("Error occurred when writing response to validate username and email request")
 	}
 
+}
+
+func (h *UserAPIHandler) ValidatePassword(w http.ResponseWriter, r *http.Request) {
+	var req mgmt.PasswordValidationRequest
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Error occurred when parsing request body: %s", r.RequestURI)
+		httperrors.BadRequest(w, 400, "Unable to parse the request")
+		return
+	}
+
+	valid, msg := utils.ValidatePassword(req.Password)
+	response := mgmt.PasswordValidationResponse{
+		IsValid: valid,
+		Msg:     msg,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	err = json.NewEncoder(w).Encode(response)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Error occurred when writing json response : %s", r.RequestURI)
+	}
 }
 
 // GetUser handles GET /api/v1/users/{id}
@@ -507,6 +533,63 @@ func (h *UserAPIHandler) UnlockUser(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (h *UserAPIHandler) GetUserAccountSetupInfo(w http.ResponseWriter, r *http.Request) {
+	recoveryId := chi.URLParam(r, "uuid")
+	res, err := h.svc.getAccountSetupInfo(recoveryId)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Request aborted due to errors")
+		httperrors.InternalError(w, 500, "Request aborted due to errors")
+		return
+	}
+
+	if !res.found {
+		httperrors.NotFound(w, 404, res.errorMsg)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	response := h.adapter.toUserAccountSetupVerficationResponse(res)
+	err = json.NewEncoder(w).Encode(response)
+	if err != nil {
+		log.Logger().Err(err).Msgf("Error occurred when writing response to request: %s", r.RequestURI)
+	}
+}
+
+func (h *UserAPIHandler) CompleteUserAccountSetup(w http.ResponseWriter, r *http.Request) {
+	var req mgmt.AccountSetupCompleteRequest
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Error in parsing request: %s", r.RequestURI)
+		httperrors.BadRequest(w, 400, "Invalid request body")
+		return
+	}
+
+	id := chi.URLParam(r, "uuid")
+	if req.Uuid != id {
+		log.Logger().Error().Msgf("Request UUID doesn't match with request body")
+		httperrors.BadRequest(w, 400, "Request UUID doesn't match with request body")
+		return
+	}
+
+	valid, errMsg := ValidateAccountSetupCompleteRequest(&req)
+	if !valid {
+		httperrors.BadRequest(w, 400, errMsg)
+		return
+	}
+
+	err = h.svc.completeAccountSetup(&req)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
+		httperrors.InternalError(w, 500, "Request aborted due to errors:")
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func (h *UserAPIHandler) Routes() chi.Router {
 	router := chi.NewRouter()
 	router.Route("/", func(r chi.Router) {
@@ -528,6 +611,9 @@ func (h *UserAPIHandler) Routes() chi.Router {
 		r.Post("/", h.CreateUser)
 		r.Get("/", h.ListUsers)
 		r.Post("/validate", h.ValidateUser)
+		r.Post("/validate-password", h.ValidatePassword)
+		r.Get("/account-setup/{uuid}", h.GetUserAccountSetupInfo)
+		r.Post("/account-setup/{uuid}/complete", h.CompleteUserAccountSetup)
 	})
 	return router
 }

@@ -307,7 +307,7 @@ func (u *userDaoImpl) GetUserAccountById(userId string, txKey string) (*models.U
 			&userAcccount.DisplayName, &locked, &userAcccount.LockedReason, &userAcccount.FailedAttempts, &createdAt, &updatedAt, &lockedAt)
 	}
 	if errors.Is(err, sql.ErrNoRows) {
-		log.Logger().Error().Msgf("No user account found for username: %s", userId)
+		log.Logger().Error().Msgf("No user account found for userId: %s", userId)
 		return nil, nil
 	}
 	if err != nil {
@@ -676,8 +676,49 @@ func (u *userDaoImpl) PersistPasswordRecovery(userId, recoveryUuid string, reaso
 	return nil
 }
 
-func (u *userDaoImpl) RetrivePasswordRecovery(userId string, txKey string) (*models.PasswordRecovery, error) {
+func (u *userDaoImpl) RetrivePasswordRecovery(uuid string, txKey string) (*models.PasswordRecovery, error) {
+	var pwRecovery models.PasswordRecovery
+	var err error
+	var createdAt string
 
+	if txKey != "" {
+		tx := u.getTx(txKey)
+		if tx == nil {
+			log.Logger().Error().Msgf("Transaction for %s already closed.", txKey)
+			return nil, db_errors.ErrTxAlreadyClosed
+		}
+
+		err = tx.QueryRow(GetPasswordRecoveryById, uuid).Scan(&pwRecovery.UserId,
+			&pwRecovery.ReasonType, &createdAt)
+
+	} else {
+		err = u.db.QueryRow(GetPasswordRecoveryById, uuid).Scan(&pwRecovery.UserId,
+			&pwRecovery.ReasonType, &createdAt)
+	}
+
+	if errors.Is(err, sql.ErrNoRows) {
+		log.Logger().Info().Msgf("No password recovery records found for id: %s", uuid)
+		return nil, nil
+	}
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Error occurred when retriving password recovery record for id: %s", uuid)
+		return nil, db_errors.ClassifyError(err, GetPasswordRecoveryById)
+	}
+
+	createdTime, err := utils.ParseSqliteTimestamp(createdAt)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Error parsing sqlite timestamp: %s", createdAt)
+	}
+	if createdTime != nil {
+		pwRecovery.CreatedAt = *createdTime
+	}
+
+	pwRecovery.RecoveryId = uuid
+
+	return &pwRecovery, nil
+}
+
+func (u *userDaoImpl) RetrivePasswordRecoveryByUserId(userId string, txKey string) (*models.PasswordRecovery, error) {
 	var pwRecovery models.PasswordRecovery
 	var err error
 	var createdAt string
@@ -740,7 +781,7 @@ func (u *userDaoImpl) DeletePasswordRecovery(userId string, txKey string) (delet
 		return false, db_errors.ClassifyError(err, DeletePasswordRecoveryByUserId)
 	}
 
-	if rows != 1 {
+	if rows <= 0 {
 		return false, nil
 	}
 

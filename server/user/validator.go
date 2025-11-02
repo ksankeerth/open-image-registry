@@ -94,3 +94,20 @@ func ValidateListUserCondition(cond *query.ListModelsConditions) (bool, string) 
 
 	return true, ""
 }
+
+func ValidateAccountSetupCompleteRequest(req *mgmt.AccountSetupCompleteRequest) (bool, string) {
+
+	if req.UserId == "" {
+		return false, "Invalid User Id"
+	}
+
+	if !utils.IsValidUsername(req.Username) {
+		return false, "Invalid username"
+	}
+
+	valid, msg := utils.ValidatePassword(req.Password)
+	if valid {
+		return true, ""
+	}
+	return false, msg
+}

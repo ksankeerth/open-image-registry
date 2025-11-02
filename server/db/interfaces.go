@@ -159,7 +159,9 @@ type UserDAO interface {
 
 	PersistPasswordRecovery(userId, recoveryUuid string, reasonType int, txkey string) error
 
-	RetrivePasswordRecovery(userId string, txKey string) (*models.PasswordRecovery, error)
+	RetrivePasswordRecoveryByUserId(userId string, txKey string) (*models.PasswordRecovery, error)
+
+	RetrivePasswordRecovery(uuid string, txKey string) (*models.PasswordRecovery, error)
 
 	DeletePasswordRecovery(userId string, txKey string) (deleted bool, err error)
 

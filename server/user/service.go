@@ -456,3 +456,148 @@ func (svc *userService) unlockUserAccount(userId string) (*unlockResult, error) 
 
 	return res, nil
 }
+
+type accountSetupVerficationResult struct {
+	id          string
+	found       bool
+	errorMsg    string
+	userId      string
+	username    string
+	email       string
+	role        string
+	displayName string
+}
+
+func (svc *userService) getAccountSetupInfo(id string) (*accountSetupVerficationResult, error) {
+
+	txKey := fmt.Sprintf("get-account-setup-info-%s", id)
+
+	var res accountSetupVerficationResult
+
+	err := svc.userDao.Begin(txKey)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Error occured when creating transaction to database: %s", txKey)
+		return nil, err
+	}
+
+	defer func() {
+		if err != nil {
+			svc.userDao.Rollback(txKey)
+		} else {
+			svc.userDao.Commit(txKey)
+		}
+	}()
+
+	pwRecovery, err := svc.userDao.RetrivePasswordRecovery(id, txKey)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Error ocurred when retriving password recovery by uuid: %s", id)
+		return nil, err
+	}
+	if pwRecovery == nil {
+		res.found = false
+		res.errorMsg = "This account setup link is no longer valid. It may have already been used.."
+		return &res, nil
+	}
+
+	if pwRecovery.ReasonType != ReasonPasswordRecoveryNewAccountSetup {
+		res.found = true
+		res.errorMsg = "This link is not valid. Please check it again ..."
+		return &res, nil
+	}
+	res.found = true
+
+	user, err := svc.userDao.GetUserAccountById(pwRecovery.UserId, txKey)
+	// user account must exist. We don't check for not-found case. Reason: PaswordRecovery Table has FK reference to UserID
+	// and Delete cascade
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Error occurred when retriving user details for account setup verification")
+		return nil, err
+	}
+
+	if user == nil {
+		res.found = false
+		res.errorMsg = "This account setup link is no longer valid. It may have already been used.."
+		return &res, nil
+	}
+
+	res.userId = pwRecovery.UserId
+	res.username = user.Username
+	res.displayName = user.DisplayName
+	res.email = user.Email
+
+	role, err := svc.userDao.GetUserRole(pwRecovery.UserId, txKey)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Error occurred when retriving user role for account setup verification")
+		return nil, err
+	}
+	res.role = role
+	return &res, nil
+}
+
+func (svc *userService) completeAccountSetup(req *mgmt.AccountSetupCompleteRequest) error {
+	txKey := fmt.Sprintf("complete-account-setup-%s", req.Uuid)
+
+	err := svc.userDao.Begin(txKey)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Error occurred when starting transaction: %s", txKey)
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			svc.userDao.Rollback(txKey)
+		} else {
+			svc.userDao.Commit(txKey)
+		}
+	}()
+
+	// TODO:  Related issue: https://github.com/ksankeerth/open-image-registry/issues/16
+	_, err = svc.userDao.UpdateUserDisplayName(req.UserId, req.DisplayName, txKey)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Error occurred when  completing account setup")
+		return err
+	}
+
+	salt, err := security.GenerateSalt(16)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Error occurred when generating salt")
+		return err
+	}
+	passwordHash := security.GeneratePasswordHash(req.Password, salt)
+
+	updated, err := svc.userDao.UpdateUserPasswordAndSalt(req.UserId, passwordHash, salt, txKey)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Error occurred when setting new password for user: %s", req.UserId)
+		return err
+	}
+	if !updated {
+		log.Logger().Warn().Msg("No entry was updated with new passowd")
+		return fmt.Errorf("account setup failed")
+	}
+
+	unlocked, err := svc.userDao.UnlockUserAccount(req.Username, txKey)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Error occurred when unlocking user account during account setup: %s", req.UserId)
+		return err
+	}
+
+	if !unlocked {
+		log.Logger().Warn().Msg("No user account was unlocked")
+		err = fmt.Errorf("account setup failed")
+		return err
+	}
+
+	deleted, err := svc.userDao.DeletePasswordRecovery(req.UserId, txKey)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Error occured when removing password recovery reference: %s", req.Uuid)
+		return err
+	}
+
+	if !deleted {
+		log.Logger().Warn().Msgf("No password recovery reference was deleted for user: %s", req.UserId)
+		err = fmt.Errorf("account setup failed")
+		return err
+	}
+	// TODO: We may send a mail here. Idea: Send instructions to use OpenImageRegistry
+	return nil
+}

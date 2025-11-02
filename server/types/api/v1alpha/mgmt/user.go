@@ -98,3 +98,29 @@ type UsernameEmailValidationResponse struct {
 	UsernameAvailable bool `json:"username_available"`
 	EmailAvailable    bool `json:"email_available"`
 }
+
+type UserAccountSetupInfoResponse struct {
+	ErrorMessage string `json:"error_message"`
+	Username     string `json:"username"`
+	UserId       string `json:"user_id"`
+	DisplayName  string `json:"display_name"`
+	Email        string `json:"email"`
+	Role         string `json:"role"`
+}
+
+type PasswordValidationRequest struct {
+	Password string `json:"password"`
+}
+
+type PasswordValidationResponse struct {
+	IsValid bool   `json:"is_valid"`
+	Msg     string `json:"msg"`
+}
+
+type AccountSetupCompleteRequest struct {
+	UserId      string `json:"user_id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	Password    string `json:"password"`
+	Uuid        string `json:"uuid"`
+}
