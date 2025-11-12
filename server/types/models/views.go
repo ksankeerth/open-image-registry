@@ -19,3 +19,23 @@ type UserAccountView struct {
 	PasswordRecoveryCreatedAt *time.Time
 	LastLoggedInAt            *time.Time
 }
+
+type ResourceAccessView struct {
+	ID           string
+	ResourceType string
+	ResourceName string
+	ResourceID   string
+	AccessLevel  string
+	UserId       string
+	Username     string
+	GrantedUser  string // granted username
+	GrantedBy    string // granted_user_id
+	GrantedAt    time.Time
+}
+
+type UpstreamAddressView struct {
+	ID          string
+	Name        string
+	Port        int
+	UpstreamUrl string
+}
