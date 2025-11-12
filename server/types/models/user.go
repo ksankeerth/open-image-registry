@@ -15,9 +15,9 @@ type UserAccount struct {
 	LockedAt       *time.Time
 }
 
-type PasswordRecovery struct {
-	UserId     string
-	RecoveryId string
+type AccountRecovery struct {
+	UserID     string
+	RecoveryID string
 	ReasonType int
 	CreatedAt  time.Time
 }

@@ -3,14 +3,14 @@ package models
 import "time"
 
 type OAuthSession struct {
-	SessionId      string
-	UserId         string
+	ID             string
+	UserID         string
 	ScopeHash      string
 	IssuedAt       time.Time
 	ExpiresAt      *time.Time
 	LastAccessedAt *time.Time
 	UserAgent      string
-	ClientIp       string
+	ClientIP       string
 	GrantType      string
 }
 
