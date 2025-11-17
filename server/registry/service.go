@@ -1,241 +1,559 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/ksankeerth/open-image-registry/client/registryclient"
-	client_errors "github.com/ksankeerth/open-image-registry/errors/client"
-	"github.com/ksankeerth/open-image-registry/types/api/v1alpha/dockerv2"
-	"github.com/ksankeerth/open-image-registry/types/api/v1alpha/oci"
+	"github.com/google/uuid"
+	up "github.com/ksankeerth/open-image-registry/client/upstream"
+	"github.com/ksankeerth/open-image-registry/client/upstream/docker"
+	"github.com/ksankeerth/open-image-registry/config"
+	"github.com/ksankeerth/open-image-registry/store"
 	"github.com/ksankeerth/open-image-registry/types/models"
 
-	db_errors "github.com/ksankeerth/open-image-registry/errors/db"
 	"github.com/ksankeerth/open-image-registry/log"
 	"github.com/ksankeerth/open-image-registry/utils"
 
-	"github.com/ksankeerth/open-image-registry/db"
 	"github.com/ksankeerth/open-image-registry/storage"
 )
 
+type upstreamInfo struct {
+	cacheEnabled bool
+	cacheTTL     int
+}
+
 type RegistryService struct {
-	registryDao      db.ImageRegistryDAO
-	upstreamDao      db.UpstreamDAO
-	registryName     string
-	registryId       string
-	namespaceIdMap   sync.Map
-	repositoryIdMap  sync.Map
-	upstreamRegistry *UpstreamRegistry
+	store           store.Store
+	registryName    string
+	registryId      string
+	namespaceIdMap  sync.Map
+	repositoryIdMap sync.Map
+	upstream        *upstreamInfo
+	client          up.UpstreamClient
 }
 
-type UpstreamRegistry struct {
-	reg           *models.UpstreamRegistryEntity
-	cacheConfig   *models.UpstreamRegistryCacheConfig
-	authConfig    *models.UpstreamRegistryAuthConfig
-	accessConfig  *models.UpstreamRegistryAccessConfig
-	storageConfig *models.UpstreamRegistryStorageConfig
-}
+func NewRegistryService(registryID, registryName string, store store.Store) *RegistryService {
 
-func NewRegistryService(registryId, registryName string,
-	registryDao db.ImageRegistryDAO, upstreamDAO db.UpstreamDAO) *RegistryService {
-	if registryDao == nil {
-		return nil
+	var upstream upstreamInfo
+	var client up.UpstreamClient
+
+	if registryID != HostedRegistryID {
+		registryModel, err := store.Upstreams().GetRegistry(context.Background(), registryID)
+		if err != nil {
+			log.Logger().Error().Err(err).Msg("Registry Service Initialization failed due to database errors")
+			return nil
+		}
+
+		if registryModel.Vendor != RegistryVendorDockerHub {
+			// For now, we only support docker-hub
+			// TODO: add support for other upstream registeries
+			log.Logger().Warn().Msg("OpenImageRegistry currently supports  DockerHub only")
+			return nil
+		}
+
+		cacheModel, err := store.Upstreams().GetRegistryCacheConfig(context.Background(), registryID)
+		if err != nil {
+			log.Logger().Error().Err(err).Msg("Registry Service Initialization failed due to database errors")
+			return nil
+		}
+		upstream.cacheEnabled = cacheModel.CacheEnabled
+		upstream.cacheTTL = cacheModel.TTLSeconds
+
+		networkConfig, err := store.Upstreams().GetRegistryNetworkConfig(context.Background(), registryID)
+		if err != nil {
+			log.Logger().Error().Err(err).Msg("Registry Service Initialization failed due to database errors")
+			return nil
+		}
+
+		if networkConfig == nil {
+			log.Logger().Warn().Str("registry", registryName).
+				Msg("Upstream Registry exists without network config")
+			return nil
+		}
+
+		authConfig, err := store.Upstreams().GetRegistryAuthConfig(context.Background(), registryID)
+		if err != nil {
+			log.Logger().Error().Err(err).Msg("Registry Service Initialization failed due to database errors")
+			return nil
+		}
+
+		if authConfig == nil {
+			return nil
+		}
+
+		var dockerAuthConfig docker.AuthConfig
+
+		err = json.Unmarshal(authConfig.ConfigJSON, &dockerAuthConfig)
+		if err != nil {
+			log.Logger().Warn().Str("registry", registryName).
+				Msg("Upstream Registry exists without auth config")
+			return nil
+		}
+
+		cfg := docker.Config{}
+		cfg.RegistryURL = registryModel.UpstreamURL
+		cfg.TokenURL = dockerAuthConfig.TokenEndpoint
+		cfg.Username = dockerAuthConfig.Username
+		cfg.Password = dockerAuthConfig.Credential
+
+		cfg.ConnectionTimeout = time.Duration(networkConfig.ConnectionTimeout)
+		cfg.RequestTimeout = time.Duration(networkConfig.ReadTimeout)
+		cfg.MaxConnections = networkConfig.MaxConnections
+		cfg.MaxIdleConnections = networkConfig.MaxIdleConnections
+		cfg.MaxRetries = networkConfig.MaxRetries
+		cfg.RetryBackOffMultiplier = networkConfig.RetryBackOffMultiplier
+
+		client = docker.NewClient(&cfg)
 	}
+
 	return &RegistryService{
-		registryId:   registryId,
+		registryId:   registryID,
 		registryName: registryName,
-		registryDao:  registryDao,
-		upstreamDao:  upstreamDAO,
+		store:        store,
+		upstream:     &upstream,
+		client:       client,
 	}
 }
 
-func (svc *RegistryService) loadUpstreamConfig() error {
-	if svc.registryId == HostedRegistryID {
-		return nil
-	}
-
-	reg, access, auth, cache, storage, err := svc.upstreamDao.GetUpstreamRegistryWithConfig(svc.registryId)
+func (svc *RegistryService) initiateBlobUpload(reqCtx context.Context, namespace, repository string) (sessionID string,
+	err error) {
+	tx, err := svc.store.Begin(reqCtx)
 	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Error occured when loading upstream registry")
-		return err
+		log.Logger().Error().Err(err).Msg("Failed to initiate blob upload due to database transaction errors")
+		return "", err
 	}
-	svc.upstreamRegistry = &UpstreamRegistry{
-		reg:           reg,
-		authConfig:    auth,
-		accessConfig:  access,
-		cacheConfig:   cache,
-		storageConfig: storage,
+	ctx := store.WithTxContext(reqCtx, tx)
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	cfg := config.GetImageRegistryConfig()
+
+	// namespace does not exist
+	namespaceID, err := svc.getNamespaceID(ctx, namespace)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to retrieve namespace from database")
+		return "", err
 	}
-	return nil
+	if namespaceID == "" && cfg.CreateNamespaceOnPush {
+		namespaceID, err = svc.store.Namespaces().Create(ctx, svc.registryId, namespace, "", "", false)
+		if err != nil {
+			log.Logger().Error().Err(err).Msg("Failed to create namespace on image push")
+			return "", err
+		}
+	}
+
+	repositoryID, err := svc.getRepositoryID(ctx, namespace, repository)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to retrieve repository from database")
+		return "", err
+	}
+	if repositoryID == "" && cfg.CreateRepositoryOnPush {
+		repositoryID, err = svc.store.Repositories().Create(ctx, svc.registryId, namespaceID, repository, "", false)
+		if err != nil {
+			log.Logger().Error().Err(err).Msg("Failed to create repository on image push")
+			return "", err
+		}
+	}
+
+	if namespaceID == "" || repositoryID == "" {
+		return "", nil
+	}
+
+	sessionID = uuid.New().String()
+
+	err = svc.store.Blobs().CreateUploadSession(ctx, sessionID, namespace, repository)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to persist image blob upload session")
+		return "", err
+	}
+
+	return sessionID, nil
 }
 
-func (svc *RegistryService) getImageBlob(namespace, repository,
+func (svc *RegistryService) blobExists(reqCtx context.Context, namespace, repository,
+	digest string) (bool, error) {
+	tx, err := svc.store.Begin(reqCtx)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to check blob existense due to database transaction errors")
+		return false, err
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	ctx := store.WithTxContext(reqCtx, tx)
+
+	exists, _, err := svc.loadImageBlob(ctx, namespace, repository, digest, false)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to retrieve image blob due to database errors")
+	}
+	return exists, err
+}
+
+func (svc *RegistryService) verifyNamespaceRepositorySession(ctx context.Context, namespace, repository,
+	sessionID string) (bool, *models.ImageBlobUploadSessionModel, error) {
+	nsID, repoID, err := svc.getNameSpaceIdAndRepositoryId(ctx, namespace, repository)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to verify namespace and repository from database")
+		return false, nil, err
+	}
+	if nsID == "" || repoID == "" {
+		return false, nil, nil
+	}
+
+	session, err := svc.store.Blobs().GetUploadSession(ctx, sessionID)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to verify blob upload session from database")
+		return false, nil, err
+	}
+
+	if session == nil {
+		return false, nil, nil
+	}
+
+	return true, session, nil
+}
+
+type blobUploadResult struct {
+	invalid       bool // if namespace or repository or session doesn't exist, it will be true
+	partialUpload bool // true if partial blob upload detected
+}
+
+func (svc *RegistryService) handleLastBlobChunk(reqCtx context.Context, namespace, repository, digest,
+	sessionID string) (result *blobUploadResult, err error) {
+	tx, err := svc.store.Begin(reqCtx)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to upload blob due to database transaction errors")
+		return nil, err
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	ctx := store.WithTxContext(reqCtx, tx)
+
+	result = &blobUploadResult{}
+
+	ok, session, err := svc.verifyNamespaceRepositorySession(ctx, namespace, repository, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		result.invalid = true
+		return result, nil
+	}
+
+	newLocation := utils.StorageLocation("blobs", svc.registryName, namespace, repository, digest)
+	oldLocation := utils.StorageLocation("blobs", svc.registryName, namespace, repository, sessionID)
+
+	size, err := storage.Size(oldLocation)
+	if err != nil {
+		return nil, err
+	}
+
+	if size != int64(session.BytesReceived) {
+		log.Logger().Warn().
+			Str("namespace", namespace).
+			Str("repository", repository).
+			Str("blob digest", digest).
+			Msg("Partial blob upload detected")
+		result.partialUpload = true
+		return result, nil
+	}
+
+	err = storage.RenameFile(oldLocation, newLocation)
+	if err != nil {
+		return nil, err
+	}
+
+	nsId, repoId, err := svc.getNameSpaceIdAndRepositoryId(ctx, namespace, repository)
+	if err != nil {
+		return nil, err
+	}
+
+	err = svc.store.Blobs().Create(ctx, svc.registryId, nsId, repoId, digest, newLocation, size)
+	if err != nil {
+		return nil, err
+	}
+
+	err = svc.store.Blobs().DeleteUploadSession(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, err
+}
+
+func (svc *RegistryService) uploadBlobChunk(reqCtx context.Context, namespace, repository,
+	sessionID string, offset int64, payload []byte) (result *blobUploadResult, err error) {
+	tx, err := svc.store.Begin(reqCtx)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to upload blob due to database transaction errors")
+		return nil, err
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	ctx := store.WithTxContext(reqCtx, tx)
+
+	result = &blobUploadResult{}
+
+	ok, session, err := svc.verifyNamespaceRepositorySession(ctx, namespace, repository, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		result.invalid = true
+		return result, nil
+	}
+
+	location := utils.StorageLocation("blobs", svc.registryName, namespace, repository, sessionID)
+
+	if session.BytesReceived != int(offset) {
+		log.Logger().Error().Err(err).
+			Str("namespace", namespace).
+			Str("repository", repository).
+			Str("session", sessionID).
+			Msg("Corrupted blob upload detected.")
+		result.partialUpload = true
+
+		err = storage.DeleteFile(location)
+		if err != nil {
+			log.Logger().Error().Err(err).Str("location", location).
+				Msg("Cleaning corrupted blob failed")
+			return nil, err
+		}
+
+		err = svc.store.Blobs().DeleteUploadSession(ctx, sessionID)
+		if err != nil {
+			log.Logger().Error().Err(err).Str("sessionID", sessionID).
+				Msg("Cleaning corrupted blob failed")
+			return nil, err
+		}
+		return result, nil
+	}
+
+	err = storage.PutFileChunk(location, payload, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	err = svc.store.Blobs().UpdateUploadSession(ctx, sessionID, int(offset)+len(payload))
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (svc *RegistryService) uploadBlobWhole(reqCtx context.Context, namespace, repository,
+	sessionID, digest string, payload []byte) (result *blobUploadResult, err error) {
+	tx, err := svc.store.Begin(reqCtx)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to upload blob due to database transaction errors")
+		return nil, err
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	ctx := store.WithTxContext(reqCtx, tx)
+
+	result = &blobUploadResult{}
+
+	ok, _, err := svc.verifyNamespaceRepositorySession(ctx, namespace, repository, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		result.invalid = true
+		return result, nil
+	}
+
+	location := utils.StorageLocation("blobs", svc.registryName, namespace, repository, digest)
+
+	err = storage.PutFile(location, payload)
+	if err != nil {
+		return nil, err
+	}
+
+	err = svc.store.Blobs().DeleteUploadSession(ctx, sessionID)
+	return result, err
+}
+
+func (svc *RegistryService) getImageBlob(reqCtx context.Context, namespace, repository,
 	digest string) (exists bool, content []byte, err error) {
-	return svc.loadImageBlob(namespace, repository, digest, false)
+	tx, err := svc.store.Begin(reqCtx)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to initiate blob upload due to database transaction errors")
+		return false, nil, err
+	}
+	ctx := store.WithTxContext(reqCtx, tx)
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+	return svc.loadImageBlob(ctx, namespace, repository, digest, false)
 }
 
-func (svc *RegistryService) isImageBlobPresent(namespace, repository, digest string) (bool, error) {
-	exits, _, err := svc.loadImageBlob(namespace, repository, digest, false)
-	return exits, err
+func (svc *RegistryService) pullBlobFromUpstream(_ context.Context, namespace, repository, digest string) (content []byte,
+	err error) {
+	return svc.client.GetBlob(namespace, repository, digest)
 }
 
-func (svc *RegistryService) loadImageBlob(namespace, repository,
+func (svc *RegistryService) loadImageBlob(ctx context.Context, namespace, repository,
 	digest string, skipContent bool) (exists bool, content []byte, err error) {
 	if svc.registryId == HostedRegistryID {
-		storageLocation, size, err := svc.registryDao.GetImageBlobStorageLocationAndSize(digest, namespace, repository, svc.registryId, "")
+		return svc.loadImageBlobFromRegistry(ctx, namespace, repository, digest, skipContent)
+	} else {
+		return svc.loadImageBlobFromUpstream(ctx, namespace, repository, digest, skipContent)
+	}
+}
 
+func (svc *RegistryService) loadImageBlobFromRegistry(ctx context.Context, namespace, repository,
+	digest string, skipContent bool) (exists bool, content []byte, err error) {
+
+	repositoryID, err := svc.getRepositoryID(ctx, namespace, repository)
+	if err != nil {
+		return false, nil, err
+	}
+
+	blobMeta, err := svc.store.Blobs().Get(ctx, digest, repositoryID)
+	if err != nil {
+		return false, nil, err
+	}
+	if blobMeta == nil {
+		return false, nil, nil
+	}
+
+	if skipContent {
+		return true, nil, nil
+	}
+
+	content, err = storage.ReadFile(blobMeta.Location)
+	if err != nil {
+		return false, nil, err
+	}
+	if len(content) != blobMeta.Size {
+		log.Logger().Warn().Msgf("Size mismatch for blob %s; Size in storage: %d, Size in database: %d",
+			blobMeta.Location, len(content), blobMeta.Size)
+	}
+	return true, content, nil
+}
+
+func (svc *RegistryService) loadImageBlobFromUpstream(ctx context.Context, namespace, repository,
+	digest string, skipContent bool) (exists bool, content []byte, err error) {
+
+	if svc.upstream.cacheEnabled {
+		repositoryID, err := svc.getRepositoryID(ctx, namespace, repository)
 		if err != nil {
-			if db_errors.IsNotFound(err) {
-				return false, nil, nil
-			}
-			log.Logger().Error().Err(err).Msgf("Unable to check Image blob existense for %s:%s:%s@%s from database", namespace, repository, digest)
 			return false, nil, err
+		}
+
+		blobMeta, err := svc.store.Blobs().Get(ctx, digest, repositoryID)
+		if err != nil {
+			return false, nil, err
+		}
+
+		if blobMeta == nil {
+			// not found in cache, load from cache and store it in cache
+			content, err = svc.pullBlobFromUpstream(ctx, namespace, repository, digest)
+			if err != nil {
+				return false, nil, err
+			}
+
+			err = svc.cacheBlob(ctx, namespace, repository, digest, content)
+			if err != nil {
+				return false, nil, err
+			}
+			return true, content, nil
 		}
 
 		if skipContent {
 			return true, nil, nil
 		}
 
-		content, err = storage.ReadFile(storageLocation)
+		content, err = storage.ReadFile(blobMeta.Location)
 		if err != nil {
 			return false, nil, err
 		}
-		if len(content) != size {
-			log.Logger().Warn().Msgf("Size mismatch for %s; Size in storage: %d, Size in database: %d", storageLocation, len(content), size)
+
+		if len(content) != blobMeta.Size {
+			log.Logger().Warn().Msgf("Size mismatch for %s; Size in storage: %d, Size in database: %d",
+				blobMeta.Location, len(content), blobMeta.Size)
 		}
 		return true, content, nil
 	} else {
-		var cacheMiss = false
-		if svc.upstreamRegistry.cacheConfig.Enabled {
-			storageLocation, size, err := svc.registryDao.GetImageBlobStorageLocationAndSize(digest, namespace, repository, svc.registryId, "")
-			if db_errors.IsNotFound(err) {
-				cacheMiss = true
-			} else {
-				if err != nil {
-					log.Logger().Error().Err(err).Msgf("Unable to check Image blob existense for %s:%s:%s@%s from database", namespace, repository, digest)
-					return false, nil, err
-				}
-
-				if skipContent {
-					return true, nil, nil
-				}
-
-				content, err = storage.ReadFile(storageLocation)
-				if err != nil {
-					return false, nil, err
-				}
-				if len(content) != size {
-					log.Logger().Warn().Msgf("Size mismatch for %s; Size in storage: %d, Size in database: %d", storageLocation, len(content), size)
-				}
-				return true, content, nil
-			}
-		}
-
-		dockerClient := registryclient.NewDockerV2RegistryClient(svc.upstreamRegistry.reg.UpstreamUrl, svc.upstreamRegistry.authConfig.TokenEndpoint)
-		dockerClient.SetWireLogging(true)
-		if cacheMiss || !skipContent {
-			content, err := dockerClient.GetBlob(namespace, repository, digest)
+		if skipContent {
+			exists, err = svc.client.HeadBlob(namespace, repository, digest)
 			if err != nil {
-				if client_errors.IsNotFound(err) {
-					return false, nil, nil
-				} else {
-					return false, nil, err
-				}
+				return false, nil, err
 			}
-			if cacheMiss {
-				err = svc.persistImageBlob(namespace, repository, digest, content)
-				if err != nil {
-					log.Logger().Error().Err(err).Msgf("Error occured when caching image blob(%s:%s:%s@%s) locally", svc.registryName, namespace, repository, digest)
-				}
+			return true, nil, nil
+		} else {
+			content, err = svc.client.GetBlob(namespace, repository, digest)
+			if err != nil {
+				return false, nil, err
 			}
 			return true, content, nil
-		} else {
-			exists, err = dockerClient.HeadBlob(namespace, repository, digest)
-			return exists, nil, err
 		}
 	}
 }
 
-func (svc *RegistryService) createNamespaceAndRepositoryIfNotExist(namespace, repository string) error {
-	_, _, err := svc.registryDao.CreateNamespaceAndRepositoryIfNotExist(svc.registryId, namespace, repository, "")
-	return err
+// cacheBlob stores the blob fetched from upstream registry and add meta information in database
+func (svc *RegistryService) cacheBlob(ctx context.Context, namespace, repository, digest string,
+	payload []byte) error {
+	location := utils.StorageLocation("blobs", svc.registryName, namespace, repository, digest)
+	err := svc.storeImageBlob(ctx, location, false, 0, payload)
+	if err != nil {
+		return err
+	}
+
+	nsId, repoId, err := svc.getNameSpaceIdAndRepositoryId(ctx, namespace, repository)
+	if err != nil {
+		return err
+	}
+
+	err = svc.store.Blobs().Create(ctx, svc.registryId, nsId, repoId, digest, location, int64(len(payload)))
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func (svc *RegistryService) persistImageBlob(namespace, repository, digest string, payload []byte) error {
-	txKey := fmt.Sprintf("blob-update-%s-%s/%s@%s", svc.registryId, namespace, repository, digest)
-	err := svc.registryDao.Begin(txKey)
-	if err != nil {
-		return err
-	}
-
-	var dbErr error
-
-	defer func() {
-		if dbErr != nil {
-			svc.registryDao.Rollback(txKey)
-		} else {
-			svc.registryDao.Commit(txKey)
-		}
-	}()
-
-	blobNotFound := true
-	_, _, dbErr = svc.registryDao.GetImageBlobStorageLocationAndSize(digest, namespace, repository, svc.registryId, txKey)
-	if dbErr != nil {
-		if db_errors.IsNotFound(dbErr) {
-			blobNotFound = true
-		} else {
-			return dbErr
-		}
-	} else {
-		blobNotFound = false
-	}
-
-	if !blobNotFound {
-		return nil
-	}
-
-	storageLocation := utils.StorageLocation("blobs", svc.registryName, namespace, repository, digest)
-	err = svc.storeImageBlob(storageLocation, false, 0, payload)
-	if err != nil {
-		return err
-	}
-
-	nsId, repoId, err := svc.getNameSpaceIdAndRepositoryId(namespace, repository)
-	if err != nil {
-		return err
-	}
-
-	dbErr = svc.registryDao.PersistImageBlobMetaInfo(svc.registryId, nsId, repoId, digest,
-		storageLocation, int64(len(payload)), txKey)
-
-	return dbErr
-}
-
-func (svc *RegistryService) persistImageBlobFinalChunk(namespace, repository, digest,
-	sessionId string) error {
-	newLocation := utils.StorageLocation("blobs", svc.registryName, namespace, repository, digest)
-	oldLocation := utils.StorageLocation("blobs", svc.registryName, namespace, repository, sessionId)
-
-	err := storage.RenameFile(oldLocation, newLocation)
-	if err != nil {
-		return err
-	}
-
-	size, err := storage.Size(newLocation)
-
-	nsId, repoId, err := svc.getNameSpaceIdAndRepositoryId(namespace, repository)
-	if err != nil {
-		return err
-	}
-
-	err = svc.registryDao.PersistImageBlobMetaInfo(svc.registryId, nsId, repoId, digest,
-		newLocation, size, "")
-	return err
-}
-
-func (svc *RegistryService) storeImageBlob(storageLocation string, isChunked bool,
+func (svc *RegistryService) storeImageBlob(ctx context.Context, storageLocation string, isChunked bool,
 	offset int64, payload []byte) error {
 	var err error
 	if isChunked {
@@ -246,34 +564,36 @@ func (svc *RegistryService) storeImageBlob(storageLocation string, isChunked boo
 	return err
 }
 
-func (svc *RegistryService) getNameSpaceIdAndRepositoryId(namespace, repository string) (string, string, error) {
-	nsId, err := svc.getNamespaceID(namespace)
+func (svc *RegistryService) getNameSpaceIdAndRepositoryId(ctx context.Context, namespace,
+	repository string) (string, string, error) {
+	nsId, err := svc.getNamespaceID(ctx, namespace)
 	if err != nil {
 		return "", "", err
 	}
 
-	repositoryId, err := svc.getRepositoryID(namespace, repository)
+	repositoryId, err := svc.getRepositoryID(ctx, namespace, repository)
 	if err != nil {
 		return "", "", err
 	}
 	return nsId, repositoryId, nil
 }
 
-func (svc *RegistryService) getNamespaceID(namespace string) (string, error) {
+func (svc *RegistryService) getNamespaceID(ctx context.Context, namespace string) (string, error) {
 	val, ok := svc.namespaceIdMap.Load(namespace)
 	if ok {
 		return val.(string), nil
 	}
 
-	nsId, err := svc.registryDao.GetNamespaceId(svc.registryId, namespace, "")
+	nsId, err := svc.store.Namespaces().GetID(ctx, svc.registryId, namespace)
 	if err != nil {
 		return "", err
 	}
+
 	svc.namespaceIdMap.Store(namespace, nsId)
 	return nsId, nil
 }
 
-func (svc *RegistryService) getRepositoryID(namespace, repository string) (string, error) {
+func (svc *RegistryService) getRepositoryID(ctx context.Context, namespace, repository string) (string, error) {
 	key := fmt.Sprintf("%s/%s", namespace, repository)
 
 	val, ok := svc.repositoryIdMap.Load(key)
@@ -281,12 +601,12 @@ func (svc *RegistryService) getRepositoryID(namespace, repository string) (strin
 		return val.(string), nil
 	}
 
-	nsId, err := svc.getNamespaceID(namespace)
+	nsId, err := svc.getNamespaceID(ctx, namespace)
 	if err != nil {
 		return "", err
 	}
 
-	repositoryId, err := svc.registryDao.GetRepositoryId(svc.registryId, nsId, repository, "")
+	repositoryId, err := svc.store.Repositories().GetID(ctx, nsId, repository)
 	if err != nil {
 		return "", err
 	}
@@ -295,29 +615,57 @@ func (svc *RegistryService) getRepositoryID(namespace, repository string) (strin
 	return repositoryId, nil
 }
 
-func (svc *RegistryService) getImageManifest(namespace, repository, tagOrDigest string) (exists bool,
-	mediaType, digest string, content []byte, err error) {
-	exists, mediaType, digest, content, err = svc.loadImageManifest(namespace, repository, tagOrDigest, false)
+func (svc *RegistryService) getImageManifest(reqCtx context.Context, namespace, repository,
+	tagOrDigest string) (exists bool, mediaType, digest string, content []byte, err error) {
+	tx, err := svc.store.Begin(reqCtx)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to retrieve manifest due to database transaction errors")
+		return false, "", "", nil, err
+	}
+	ctx := store.WithTxContext(reqCtx, tx)
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+	exists, mediaType, digest, content, err = svc.loadImageManifest(ctx, namespace, repository,
+		tagOrDigest, false)
 	return
 }
 
-func (svc *RegistryService) isImageManifestPresent(namespace, repository,
+func (svc *RegistryService) manifestExists(reqCtx context.Context, namespace, repository,
 	tagOrDigest string) (exists bool, mediaType, digest string, err error) {
 
-	exists, mediaType, digest, _, err = svc.loadImageManifest(namespace, repository, tagOrDigest, true)
+	tx, err := svc.store.Begin(reqCtx)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to check manifest due to database transaction errors")
+		return false, "", "", err
+	}
+	ctx := store.WithTxContext(reqCtx, tx)
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	exists, mediaType, digest, _, err = svc.loadImageManifest(ctx, namespace, repository, tagOrDigest, true)
 	return
 }
 
-func (svc *RegistryService) loadImageManifest(namespace, repository,
+func (svc *RegistryService) loadImageManifest(ctx context.Context, namespace, repository,
 	tagOrDigest string, skipContent bool) (exists bool, mediaType, digest string, content []byte, err error) {
 	if svc.registryId == HostedRegistryID {
 		if utils.IsImageDigest(tagOrDigest) {
-			exists, content, mediaType, err = svc.loadImageManifestFromDbByDigest(namespace, repository, tagOrDigest,
-				skipContent, "")
+			exists, content, mediaType, err = svc.loadManifestByDigest(ctx, namespace, repository, tagOrDigest,
+				skipContent)
 
 		} else {
-			exists, digest, mediaType, content, err = svc.loadImageManifestFromDbByTag(namespace, repository, tagOrDigest,
-				skipContent, "")
+			exists, digest, mediaType, content, err = svc.loadManifestByTag(ctx, namespace, repository, tagOrDigest,
+				skipContent)
 		}
 
 		if !exists {
@@ -327,86 +675,65 @@ func (svc *RegistryService) loadImageManifest(namespace, repository,
 
 		return exists, mediaType, digest, content, err
 	} else {
-		var cacheMiss = false
-
-		// load upstream config on demand
-		if svc.upstreamRegistry == nil {
-			err = svc.loadUpstreamConfig()
+		if svc.upstream.cacheEnabled {
+			exists, digest, mediaType, content, err = svc.loadManifestFromCache(ctx, namespace, repository,
+				tagOrDigest, skipContent)
 			if err != nil {
-				log.Logger().Error().Err(err).Msgf("Unable to handle request. Loading Upstream registry configuration is failed")
-				return
-			}
-		}
-		if svc.upstreamRegistry.cacheConfig.Enabled {
-			exists, digest, mediaType, content, err = svc.loadManifestFromCache(namespace, repository, tagOrDigest, skipContent)
-			if exists {
-				return
-			}
-			cacheMiss = true
-		}
-
-		if cacheMiss {
-
-			// if it is cache miss, we'll always download manifest from registry and cache locally regardless of `skipContent`
-			exists, digest, mediaType, content, err = svc.loadImageManifestFromRegistry(namespace, repository, tagOrDigest, false)
-			if err != nil {
-				return
+				return false, "", "", nil, err
 			}
 			if exists {
-				if utils.IsImageDigest(tagOrDigest) {
-					err = svc.cacheManifest(namespace, repository, digest, mediaType, content)
-				} else {
-					err = svc.cacheManifestWithTag(namespace, repository, tagOrDigest, digest, mediaType, content)
-				}
-				if err != nil {
-					log.Logger().Error().Err(err).Msgf("Error occured caching image manifest: (%s/%s/%s@%s)", svc.registryName, namespace, repository, digest)
-				}
+				return true, mediaType, digest, content, nil
 			}
-			return
-		}
+			content, mediaType, err := svc.client.GetManifest(namespace, repository, tagOrDigest)
+			if err != nil {
+				return false, "", "", nil, err
+			}
 
-		exists, digest, mediaType, content, err = svc.loadImageManifestFromRegistry(namespace, repository,
-			tagOrDigest, skipContent)
-		if !exists {
-			log.Logger().Warn().Msgf("No manifest found for: %s/%s/%s:%s", svc.registryName, namespace, repository,
-				tagOrDigest)
-			err = nil
-		}
+			if utils.IsImageDigest(tagOrDigest) {
+				digest = tagOrDigest
+			} else {
+				digest = utils.CalcuateDigest(content)
+			}
+			err = svc.cacheManifest(ctx, namespace, repository, tagOrDigest, digest, mediaType, content)
+			if err != nil {
+				return false, "", "", nil, err
+			}
 
-		return
+			return true, mediaType, digest, content, nil
+		} else {
+			if skipContent {
+				exists, err = svc.client.HeadManifest(namespace, repository, tagOrDigest)
+			} else {
+				content, mediaType, err = svc.client.GetManifest(namespace, repository, tagOrDigest)
+				exists = true
+			}
+			if err != nil {
+				return false, "", "", nil, err
+			}
+			return exists, mediaType, utils.CalcuateDigest(content), content, nil
+		}
 	}
 }
 
-func (svc *RegistryService) loadManifestFromCache(namsespace, repository, tagOrDigest string,
+func (svc *RegistryService) loadManifestFromCache(ctx context.Context, namsespace, repository,
+	tagOrDigest string,
 	skipContent bool) (exists bool, digest, mediaType string, content []byte, err error) {
-	nsId, repoId, err := svc.getNameSpaceIdAndRepositoryId(namsespace, repository)
+	_, repoId, err := svc.getNameSpaceIdAndRepositoryId(ctx, namsespace, repository)
 	if err != nil {
 		return false, "", "", nil, err
 	}
 
-	txKey := fmt.Sprintf("load-manifest-from-cache-%s/%s/%s/%s", svc.registryId, nsId, repoId, tagOrDigest)
-	err = svc.registryDao.Begin(txKey)
+	cacheModel, err := svc.store.Cache().Get(ctx, repoId, tagOrDigest)
 	if err != nil {
 		return false, "", "", nil, err
 	}
 
-	defer func() {
-		if err != nil {
-			svc.registryDao.Rollback(txKey)
-		} else {
-			svc.registryDao.Commit(txKey)
-		}
-	}()
-
-	cacheMiss, digest, expiresAt, err := svc.registryDao.GetCacheImageManifestReference(svc.registryId, nsId,
-		repoId, tagOrDigest, txKey)
-	if err != nil {
-		return false, "", "", nil, err
-	}
-	if cacheMiss {
+	if cacheModel == nil {
 		return false, "", "", nil, nil
 	}
-	if expiresAt.Before(time.Now()) {
+
+	// TODO stable tag
+	if cacheModel.ExpiresAt.Before(time.Now()) {
 		// We won't delete the cache entry. Even if the time expired, manifest may not be changed in upstream
 		// After retriving manifest from upstream proxy, we'll check digest values. if they are same, We'll
 		// refresh the cache entry instead of deleting and adding again.
@@ -414,203 +741,144 @@ func (svc *RegistryService) loadManifestFromCache(namsespace, repository, tagOrD
 	}
 
 	if utils.IsImageDigest(tagOrDigest) {
-		exists, content, mediaType, err = svc.loadImageManifestFromDbByDigest(namsespace, repository, tagOrDigest, skipContent, txKey)
+		exists, content, mediaType, err = svc.loadManifestByDigest(ctx, namsespace, repository, tagOrDigest, skipContent)
 	} else {
-		exists, _, mediaType, content, err = svc.loadImageManifestFromDbByTag(namsespace, repository, tagOrDigest, skipContent, txKey)
+		exists, _, mediaType, content, err = svc.loadManifestByTag(ctx, namsespace, repository, tagOrDigest, skipContent)
 	}
 
 	if !exists {
 		log.Logger().Warn().Msgf("Cache reference for manifest: (%s/%s/%s@%s) exists but actual manifest is not available in the database",
 			svc.registryName, namsespace, repository, digest)
-		err = svc.registryDao.DeleteCacheImageManifestReference(svc.registryId, nsId, repoId, tagOrDigest, txKey)
+
+		err = svc.store.Cache().Delete(ctx, repoId, tagOrDigest)
 		if err != nil {
 			log.Logger().Error().Err(err).Msgf("Error occured when cleaning cache manifest referece: (%s/%s/%s@%s)", svc.registryName, namsespace, repository, digest)
+			return false, "", "", nil, err
 		}
 	}
 
 	return
 }
 
-func (svc *RegistryService) cacheManifestWithTag(namespace, repository, tag, digest, mediaType string, content []byte) error {
-	txKey := fmt.Sprintf("cache-manifest-%s:%s:%s:%s", svc.registryName, namespace, repository, tag)
-	err := svc.registryDao.Begin(txKey)
+// cacheManifest stores a  manifest reference in cache table and actual manifest will be stored
+func (svc *RegistryService) cacheManifest(ctx context.Context, namespace, repository, identifier, digest,
+	mediaType string, content []byte) error {
+
+	validTill := time.Now().Add(time.Duration(svc.upstream.cacheTTL) * time.Second)
+	nsId, repositoryId, err := svc.getNameSpaceIdAndRepositoryId(ctx, namespace, repository)
 	if err != nil {
 		return err
 	}
 
-	defer func() {
-		if err != nil {
-			svc.registryDao.Rollback(txKey)
-		} else {
-			svc.registryDao.Commit(txKey)
-		}
-	}()
-
-	validTill := time.Now().Add(time.Duration(svc.upstreamRegistry.cacheConfig.TtlInSeconds * time.Now().Second()))
-
-	nsId, repositoryId, err := svc.getNameSpaceIdAndRepositoryId(namespace, repository)
+	cacheEntry, err := svc.store.Cache().Get(ctx, repositoryId, digest)
 	if err != nil {
 		return err
 	}
 
-	cacheMiss, oldDigest, _, err := svc.registryDao.GetCacheImageManifestReference(svc.registryId, nsId, repositoryId, tag, txKey)
-	if err != nil {
-		return err
-	}
-	var changed = false
-	if !cacheMiss {
-		if oldDigest == digest {
-			err = svc.registryDao.RefreshCacheImageManifestReference(svc.registryId, nsId, repositoryId, tag, validTill, txKey)
+	var cacheMiss bool
+	if cacheEntry == nil { // no cache entry
+		err = svc.store.Cache().Create(ctx, svc.registryId, nsId, repositoryId, identifier, digest, validTill)
+		cacheMiss = true
+	} else { // cache entry exists
+		if cacheEntry.Digest == digest { // digest is same
+			err = svc.store.Cache().Refresh(ctx, repositoryId, identifier, validTill)
+		} else { // digest has changed. so let's add new manifest, identifier is a tag
+			cacheMiss = true
+			err = svc.store.Cache().Delete(ctx, repositoryId, identifier)
 			if err != nil {
 				return err
 			}
-			err = svc.registryDao.RefreshCacheImageManifestReference(svc.registryId, nsId, repositoryId, digest, validTill, txKey)
+			err = svc.store.Manifests().DeleteByDigest(ctx, repositoryId, digest)
 			if err != nil {
 				return err
 			}
-		} else {
-			changed = true
+			err = svc.store.Cache().Create(ctx, svc.registryId, nsId, repositoryId, identifier, digest, validTill)
 		}
 	}
 
-	if changed {
-		err = svc.registryDao.DeleteCacheImageManifestReference(svc.registryId, nsId, repositoryId, tag, txKey)
-		if err != nil {
-			return err
-		}
-		err = svc.registryDao.DeleteCacheImageManifestReference(svc.registryId, nsId, repositoryId, oldDigest, txKey)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = svc.registryDao.CacheImageManifestReference(svc.registryId, nsId, repositoryId, tag, validTill, txKey)
-	if err != nil {
-		return err
-	}
-
-	err = svc.registryDao.CacheImageManifestReference(svc.registryId, nsId, repositoryId, digest, validTill, txKey)
 	if err != nil {
 		return err
 	}
 
 	// for upstream manifests, unique-digest = digest
-	var manifestId string
-	manifestId, err = svc.registryDao.PersistImageManifest(svc.registryId, nsId, repositoryId, digest, mediaType,
-		digest, int64(len(content)), content, txKey)
-	if err != nil {
-		return err
-	}
-
-	tagId, err := svc.registryDao.GetImageTagId(repositoryId, nsId, repositoryId, tag, txKey)
-	if db_errors.IsNotFound(err) {
-		tagId, err = svc.registryDao.CreateImageTag(svc.registryId, nsId, repositoryId, tag, txKey)
+	if cacheMiss {
+		manifestID, err := svc.store.Manifests().Create(ctx, svc.registryId, nsId, repositoryId, digest, mediaType, digest,
+			int64(len(content)), content)
 		if err != nil {
 			return err
 		}
-	} else if err != nil {
-		return err
-	}
 
-	err = svc.registryDao.LinkImageManifestWithTag(tagId, manifestId, txKey)
-	return err
-}
+		// if identifier is tag, link the tag and manifest
+		if !utils.IsImageDigest(identifier) {
+			tag, err := svc.store.Tags().Get(ctx, repositoryId, identifier)
+			if err != nil {
+				return err
+			}
 
-func (svc *RegistryService) cacheManifest(namespace, repository, digest, mediaType string, content []byte) error {
-	txKey := fmt.Sprintf("cache-manifest-%s:%s:%s:%s", svc.registryName, namespace, repository, digest)
-	err := svc.registryDao.Begin(txKey)
-	if err != nil {
-		return err
-	}
+			if tag == nil {
+				tagID, err := svc.store.Tags().Create(ctx, svc.registryId, nsId, repositoryId, identifier)
+				if err != nil {
+					return err
+				}
 
-	defer func() {
-		if err != nil {
-			svc.registryDao.Rollback(txKey)
-		} else {
-			svc.registryDao.Commit(txKey)
+				err = svc.store.Tags().LinkManifest(ctx, tagID, manifestID)
+				if err != nil {
+					return err
+				}
+			} else {
+				err = svc.store.Tags().UnlinkManifest(ctx, tag.Id)
+				if err != nil {
+					return err
+				}
+				err = svc.store.Tags().LinkManifest(ctx, tag.Id, manifestID)
+				if err != nil {
+					return err
+				}
+			}
+
 		}
-	}()
-
-	validTill := time.Now().Add(time.Duration(svc.upstreamRegistry.cacheConfig.TtlInSeconds * time.Now().Second()))
-
-	nsId, repositoryId, err := svc.getNameSpaceIdAndRepositoryId(namespace, repository)
-	if err != nil {
-		return err
 	}
 
-	cacheMiss, _, _, err := svc.registryDao.GetCacheImageManifestReference(svc.registryId, nsId, repositoryId, digest, txKey)
-	if err != nil {
-		return err
-	}
-	if !cacheMiss {
-		svc.registryDao.RefreshCacheImageManifestReference(svc.registryId, nsId, repositoryId, digest, validTill, txKey)
-		// no need to update the existing manifest
-		return nil
-	}
-
-	err = svc.registryDao.CacheImageManifestReference(svc.registryId, nsId, repositoryId, digest, validTill, txKey)
-	if err != nil {
-		return err
-	}
-
-	// for upstream manifests, unique-digest = digest
-	_, err = svc.registryDao.PersistImageManifest(svc.registryId, nsId, repositoryId, digest, mediaType,
-		digest, int64(len(content)), content, txKey)
-	return err
-
+	return nil
 }
 
-func (svc *RegistryService) loadImageManifestFromDbByTag(namespace, repository, tag string,
-	skipContent bool, txKey string) (exists bool, digest, mediaType string, content []byte, err error) {
-	nsId, repositoryId, err := svc.getNameSpaceIdAndRepositoryId(namespace, repository)
+func (svc *RegistryService) loadManifestByTag(ctx context.Context, namespace, repository, tag string,
+	skipContent bool) (exists bool, digest, mediaType string, content []byte, err error) {
+	_, repositoryId, err := svc.getNameSpaceIdAndRepositoryId(ctx, namespace, repository)
 	if err != nil {
 		return false, "", "", nil, err
 	}
 
-	if skipContent {
-		exists, digest, mediaType, err = svc.registryDao.CheckImageManifestExistsByTag(svc.registryId, nsId, repositoryId, tag, txKey)
-	} else {
-		exists, content, digest, mediaType, err = svc.registryDao.GetImageManifestByTag(svc.registryId, nsId, repositoryId, tag, txKey)
+	manifest, err := svc.store.ImageQueries().GetManifestByTag(ctx, !skipContent, repositoryId, tag)
+	if err != nil {
+		return false, "", "", nil, err
 	}
-	return
+	if manifest == nil {
+		return false, "", "", nil, nil
+	}
+
+	return true, manifest.Digest, manifest.MediaType, []byte(manifest.Content), nil
 }
 
-func (svc *RegistryService) loadImageManifestFromDbByDigest(namespace, repository, digest string,
-	skipContent bool, txKey string) (exists bool, content []byte, mediaType string, err error) {
-	nsId, repositoryId, err := svc.getNameSpaceIdAndRepositoryId(namespace, repository)
+func (svc *RegistryService) loadManifestByDigest(ctx context.Context, namespace, repository, digest string,
+	skipContent bool) (exists bool, content []byte, mediaType string, err error) {
+	_, repositoryId, err := svc.getNameSpaceIdAndRepositoryId(ctx, namespace, repository)
 	if err != nil {
 		return false, nil, "", err
 	}
 
-	if skipContent {
-		exists, mediaType, err = svc.registryDao.CheckImageManifestExistsByDigest(svc.registryId, nsId, repositoryId, digest, txKey)
-	} else {
-		exists, content, mediaType, err = svc.registryDao.GetImageManifestByDigest(svc.registryId, nsId, repositoryId, digest, txKey)
+	manifest, err := svc.store.Manifests().GetByDigest(ctx, !skipContent, repositoryId, digest)
+	if err != nil {
+		return false, nil, "", err
 	}
-	return
+	if manifest == nil {
+		return false, nil, "", nil
+	}
+
+	return true, []byte(manifest.Content), manifest.MediaType, nil
 }
 
-func (svc *RegistryService) loadImageManifestFromRegistry(namespace, repository, tagOrDigest string,
-	skipContent bool) (exists bool, digest, mediaType string, content []byte, err error) {
-
-	dockerClient := registryclient.NewDockerV2RegistryClient(svc.upstreamRegistry.reg.UpstreamUrl, svc.upstreamRegistry.authConfig.TokenEndpoint)
-	dockerClient.SetWireLogging(true)
-
-	if skipContent {
-		exists, digest, mediaType, err = dockerClient.HeadManifest(namespace, repository, tagOrDigest)
-	} else {
-		content, mediaType, err = dockerClient.GetManifest(namespace, repository, tagOrDigest)
-		if client_errors.IsNotFound(err) {
-			exists = false
-		} else if err != nil {
-			return false, "", "", nil, err
-		}
-		exists = true
-	}
-	return
-}
-
-type ManifestCheckResult struct {
+type ManifestScanResult struct {
 	TagExists              bool
 	ManifestExists         bool
 	TagManifestLinkExists  bool
@@ -622,53 +890,59 @@ type ManifestCheckResult struct {
 	RepositoryId           string
 }
 
-func (svc *RegistryService) updateManifest(namespace, repository, tag,
+func (svc *RegistryService) updateManifest(reqCtx context.Context, namespace, repository, tag,
 	mediaType string, content []byte) (digest string, err error) {
 
-	txKey := fmt.Sprintf("update-manifest-%s/%s/%s/%s", svc.registryName, namespace, repository, tag)
-	err = svc.registryDao.Begin(txKey)
+	tx, err := svc.store.Begin(reqCtx)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to update manifest due to database transaction errors")
+		return "", err
+	}
+	ctx := store.WithTxContext(reqCtx, tx)
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	uniqueDigest, err := UniqueDigest(mediaType, content)
 	if err != nil {
 		return "", err
 	}
 
-	defer func() {
-		if err != nil {
-			svc.registryDao.Rollback(txKey)
-		} else {
-			svc.registryDao.Commit(txKey)
-		}
-	}()
-
-	res, err := svc.checkManifestInDatabase(namespace, repository, tag, mediaType, content, txKey)
+	res, err := svc.scanManifest(ctx, uniqueDigest, namespace, repository, tag)
 	if err != nil {
 		return "", err
 	}
 
 	if !res.TagExists {
-		tagId, err := svc.registryDao.CreateImageTag(svc.registryId, res.NamespaceId, res.RepositoryId, tag, txKey)
+		tagId, err := svc.store.Tags().Create(ctx, svc.registryId, res.NamespaceId, res.RepositoryId, tag)
 		if err != nil {
 			return "", err
 		}
 		res.TagId = tagId
 	}
+
 	manifestDigest := utils.CalcuateDigest(content)
 
 	if !res.ManifestExists {
-		manifestId, err := svc.registryDao.PersistImageManifest(svc.registryId, res.NamespaceId, res.RepositoryId,
-			manifestDigest, mediaType, res.UniqueDigest, int64(len(content)), content, txKey)
+		manifestId, err := svc.store.Manifests().Create(ctx, svc.registryId, res.NamespaceId, res.RepositoryId,
+			manifestDigest, mediaType, res.UniqueDigest, int64(len(content)), content)
 		if err != nil {
 			return "", err
 		}
 		res.ManifestId = manifestId
 
-		err = svc.registryDao.LinkImageManifestWithTag(res.TagId, res.ManifestId, txKey)
+		svc.store.Tags().LinkManifest(ctx, res.TagId, res.ManifestId)
 		if err != nil {
 			return "", err
 		}
 	}
 
 	if res.TagManifestLinkChanged {
-		err = svc.registryDao.UpdateManifestIdForTag(res.TagId, res.ManifestId, txKey)
+		err = svc.store.Tags().UpdateManifest(ctx, res.TagId, res.ManifestId)
 		if err != nil {
 			return "", err
 		}
@@ -676,106 +950,50 @@ func (svc *RegistryService) updateManifest(namespace, repository, tag,
 	return manifestDigest, nil
 }
 
-func (svc *RegistryService) checkManifestInDatabase(
-	namespace, repository, tag, mediaType string, content []byte, txKey string,
-) (*ManifestCheckResult, error) {
+func (svc *RegistryService) scanManifest(ctx context.Context, uniqueDigest, namespace, repository,
+	tag string) (*ManifestScanResult, error) {
 
-	var uniqueDigest string
-
-	switch mediaType {
-	case "application/vnd.docker.distribution.manifest.v2+json":
-		var manifest dockerv2.ManifestV2
-		if err := json.Unmarshal(content, &manifest); err != nil {
-			return nil, err
-		}
-		inputs := []string{manifest.Config.Digest}
-		for _, entry := range manifest.Layers {
-			inputs = append(inputs, entry.Digest)
-		}
-		uniqueDigest = utils.CombineAndCalculateSHA256Digest(inputs...)
-
-	case "application/vnd.docker.distribution.manifest.list.v2+json":
-		var manifest dockerv2.ManifestListV2
-		if err := json.Unmarshal(content, &manifest); err != nil {
-			return nil, err
-		}
-		inputs := []string{}
-		for _, entry := range manifest.Manifests {
-			inputs = append(inputs, entry.Digest)
-		}
-		uniqueDigest = utils.CombineAndCalculateSHA256Digest(inputs...)
-
-	case "application/vnd.oci.image.manifest.v1+json":
-		var manifest oci.OCIImageManifest
-		if err := json.Unmarshal(content, &manifest); err != nil {
-			return nil, err
-		}
-		inputs := []string{manifest.Config.Digest}
-		for _, layer := range manifest.Layers {
-			inputs = append(inputs, layer.Digest)
-		}
-		uniqueDigest = utils.CombineAndCalculateSHA256Digest(inputs...)
-
-	case "application/vnd.oci.image.index.v1+json":
-		var manifest oci.OCIImageIndex
-		if err := json.Unmarshal(content, &manifest); err != nil {
-			return nil, err
-		}
-		if manifest.Manifests == nil {
-			return nil, fmt.Errorf("no manifests found in OCI index")
-		}
-		manifestDigests := []string{}
-		for _, m := range manifest.Manifests {
-			manifestDigests = append(manifestDigests, m.Digest)
-		}
-		uniqueDigest = utils.CombineAndCalculateSHA256Digest(manifestDigests...)
-
-	default:
-		return nil, fmt.Errorf("unsupported mediaType: %s", mediaType)
-	}
-
-	nsId, repoId, err := svc.getNameSpaceIdAndRepositoryId(namespace, repository)
+	nsId, repoId, err := svc.getNameSpaceIdAndRepositoryId(ctx, namespace, repository)
 	if err != nil {
 		return nil, err
 	}
 
 	// Check manifest existence
-	manifestExists, manifestId, err := svc.registryDao.CheckImageManifestExistsByUniqueDigest(
-		svc.registryId, nsId, repoId, uniqueDigest, txKey,
-	)
+	manifestModel, err := svc.store.Manifests().GetByUniqueDigest(ctx, false, repoId, uniqueDigest)
 	if err != nil {
 		return nil, err
 	}
 
-	result := &ManifestCheckResult{
-		ManifestExists: manifestExists,
+	if manifestModel == nil {
+		return &ManifestScanResult{ManifestExists: false}, nil
+	}
+
+	result := &ManifestScanResult{
+		ManifestExists: true,
 		UniqueDigest:   uniqueDigest,
-		ManifestId:     manifestId,
+		ManifestId:     manifestModel.ID,
 		NamespaceId:    nsId,
 		RepositoryId:   repoId,
 	}
 
 	// Check tag existence
-	tagId, err := svc.registryDao.GetImageTagId(svc.registryId, nsId, repoId, tag, txKey)
-	if db_errors.IsNotFound(err) {
-		result.TagExists = false
-	} else if err != nil {
+	tagModel, err := svc.store.Tags().Get(ctx, repoId, tag)
+	if err != nil {
 		return nil, err
-	} else {
-		result.TagExists = true
-		result.TagId = tagId
 	}
 
-	// Check tag->manifest link
-	oldManifestId, err := svc.registryDao.GetLinkedManifestByTagId(tagId, txKey)
-	if db_errors.IsNotFound(err) {
-		result.TagManifestLinkExists = false
-	} else if err != nil {
-		return nil, err
+	if tagModel == nil {
+		result.TagExists = false
 	} else {
-		result.TagManifestLinkExists = true
-		if oldManifestId != manifestId {
-			result.TagManifestLinkChanged = true
+		result.TagExists = true
+		result.TagId = tagModel.Id
+		// Check tag->manifest link
+		oldManifestId, err := svc.store.Tags().GetManifestID(ctx, tagModel.Id)
+		if err != nil {
+			return nil, err
+		}
+		if oldManifestId == "" {
+			result.TagManifestLinkExists = false
 		}
 	}
 

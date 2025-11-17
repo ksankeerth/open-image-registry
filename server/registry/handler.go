@@ -9,11 +9,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httplog/v2"
-	"github.com/google/uuid"
 
-	"github.com/ksankeerth/open-image-registry/db"
 	"github.com/ksankeerth/open-image-registry/errors/dockererrors"
 	"github.com/ksankeerth/open-image-registry/log"
+	"github.com/ksankeerth/open-image-registry/store"
 	"github.com/ksankeerth/open-image-registry/utils"
 )
 
@@ -23,10 +22,9 @@ type RegistryHandler struct {
 	svc          *RegistryService
 }
 
-func NewRegistryHandler(registryId, registryName string, registryDao db.ImageRegistryDAO,
-	upstreamDao db.UpstreamDAO) *RegistryHandler {
+func NewRegistryHandler(registryId, registryName string, s store.Store) *RegistryHandler {
 
-	svc := NewRegistryService(registryId, registryName, registryDao, upstreamDao)
+	svc := NewRegistryService(registryId, registryName, s)
 
 	return &RegistryHandler{
 		registryId:   registryId,
@@ -46,38 +44,38 @@ func (rh *RegistryHandler) Routes() chi.Router {
 	})))
 
 	r.Route("/v2", func(r chi.Router) {
-		r.Get("/", rh.GetDockerV2APISupport)
+		r.Get("/", rh.dockerV2APISupport)
 
 		//blob
-		r.Post("/{namespace}/{repository}/blobs/uploads/", rh.InitiateImageBlobUpload)
-		r.Post("/{repository}/blobs/uploads/", rh.InitiateImageBlobUpload)
+		r.Post("/{namespace}/{repository}/blobs/uploads/", rh.initiateBlobUpload)
+		r.Post("/{repository}/blobs/uploads/", rh.initiateBlobUpload)
 
-		r.Head("/{namespace}/{repository}/blobs/{digest}", rh.IsImageBlobPresent)
-		r.Head("/{repository}/blobs/{digest}", rh.IsImageBlobPresent)
+		r.Head("/{namespace}/{repository}/blobs/{digest}", rh.blobExists)
+		r.Head("/{repository}/blobs/{digest}", rh.blobExists)
 
-		r.Put("/{namespace}/{repository}/blobs/uploads/{session_id}", rh.HandleImageBlobUpload)
-		r.Put("/{repository}/blobs/uploads/{session_id}", rh.HandleImageBlobUpload)
+		r.Put("/{namespace}/{repository}/blobs/uploads/{session_id}", rh.handleBlobUpload)
+		r.Put("/{repository}/blobs/uploads/{session_id}", rh.handleBlobUpload)
 
-		r.Patch("/{namespace}/{repository}/blobs/uploads/{session_id}", rh.HandleImageBlobUpload)
-		r.Patch("/{repository}/blobs/uploads/{session_id}", rh.HandleImageBlobUpload)
+		r.Patch("/{namespace}/{repository}/blobs/uploads/{session_id}", rh.handleBlobUpload)
+		r.Patch("/{repository}/blobs/uploads/{session_id}", rh.handleBlobUpload)
 
-		r.Get("/{namespace}/{repository}/blobs/{digest}", rh.GetImageBlob)
-		r.Get("/{repository}/blobs/{digest}", rh.GetImageBlob)
+		r.Get("/{namespace}/{repository}/blobs/{digest}", rh.getImageBlob)
+		r.Get("/{repository}/blobs/{digest}", rh.getImageBlob)
 
-		r.Head("/{namespace}/{repository}/manifests/{tag_or_digest}", rh.IsImageManifestPresent)
-		r.Head("/{repository}/manifests/{tag_or_digest}", rh.IsImageManifestPresent)
+		r.Head("/{namespace}/{repository}/manifests/{tag_or_digest}", rh.manifestExists)
+		r.Head("/{repository}/manifests/{tag_or_digest}", rh.manifestExists)
 
-		r.Put("/{namespace}/{repository}/manifests/{tag}", rh.UpdateManifest)
-		r.Put("/{repository}/manifests/{tag}", rh.UpdateManifest)
+		r.Put("/{namespace}/{repository}/manifests/{tag}", rh.updateManifest)
+		r.Put("/{repository}/manifests/{tag}", rh.updateManifest)
 
-		r.Get("/{namespace}/{repository}/manifests/{tag_or_digest}", rh.GetImageManifest)
-		r.Get("/{repository}/manifests/{tag_or_digest}", rh.GetImageManifest)
+		r.Get("/{namespace}/{repository}/manifests/{tag_or_digest}", rh.getManifest)
+		r.Get("/{repository}/manifests/{tag_or_digest}", rh.getManifest)
 	})
 
 	return r
 }
 
-func (rh *RegistryHandler) GetDockerV2APISupport(w http.ResponseWriter, r *http.Request) {
+func (rh *RegistryHandler) dockerV2APISupport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Docker-Distribution-API-Version", "registry/2.0")
 	w.Header().Set("Content-Type", "application/json")
 
@@ -85,7 +83,7 @@ func (rh *RegistryHandler) GetDockerV2APISupport(w http.ResponseWriter, r *http.
 	w.Write([]byte(`{"Docker-Distribution-API-Version": "registry/2.0"}`))
 }
 
-func (rh *RegistryHandler) InitiateImageBlobUpload(w http.ResponseWriter, r *http.Request) {
+func (rh *RegistryHandler) initiateBlobUpload(w http.ResponseWriter, r *http.Request) {
 	if rh.registryId != HostedRegistryID {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -100,34 +98,37 @@ func (rh *RegistryHandler) InitiateImageBlobUpload(w http.ResponseWriter, r *htt
 		return
 	}
 
-	sessionId := uuid.New().String()
+	sessionID, err := rh.svc.initiateBlobUpload(r.Context(), namespace, repository)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Request aborted due to errors")
+		dockererrors.WriteBlobUploadInvalid(w)
+		return
+	}
+
+	// namespace or repository do not exist
+	if sessionID == "" {
+		dockererrors.WriteRepositoryNotFound(w)
+		return
+	}
 
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
 	}
 
-	err := rh.svc.createNamespaceAndRepositoryIfNotExist(namespace, repository)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	uploadUrl := fmt.Sprintf("%s://%s/v2/%s/%s/blobs/uploads/%s", scheme, r.Host, namespace, repository, sessionId)
+	uploadUrl := fmt.Sprintf("%s://%s/v2/%s/%s/blobs/uploads/%s", scheme, r.Host, namespace, repository, sessionID)
 
 	w.Header().Set("Location", uploadUrl)
-	w.Header().Set("Docker-Upload-UUID", sessionId)
+	w.Header().Set("Docker-Upload-UUID", sessionID)
 	w.Header().Set("Range", "0-0")
-
 	w.WriteHeader(http.StatusAccepted)
-
 	w.Write([]byte(`{"Location":"` + uploadUrl + `" }`))
 }
 
-func (rh *RegistryHandler) IsImageBlobPresent(w http.ResponseWriter, r *http.Request) {
+func (rh *RegistryHandler) blobExists(w http.ResponseWriter, r *http.Request) {
 	namespace, repository, digest := extractNamespaceRepositoryAndDigest(r)
 
-	exists, err := rh.svc.isImageBlobPresent(namespace, repository, digest)
+	exists, err := rh.svc.blobExists(r.Context(), namespace, repository, digest)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	} else if exists {
@@ -137,7 +138,7 @@ func (rh *RegistryHandler) IsImageBlobPresent(w http.ResponseWriter, r *http.Req
 	}
 }
 
-func (rh *RegistryHandler) HandleImageBlobUpload(w http.ResponseWriter, r *http.Request) {
+func (rh *RegistryHandler) handleBlobUpload(w http.ResponseWriter, r *http.Request) {
 	if rh.registryId != HostedRegistryID {
 		// For the proxy registries, not allowed to upload blobs
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -154,27 +155,25 @@ func (rh *RegistryHandler) HandleImageBlobUpload(w http.ResponseWriter, r *http.
 
 	payload, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Unable to read chunk from request: %s", r.RequestURI)
+		log.Logger().Error().Err(err).Msgf("Unable to read blob payload from request: %s", r.RequestURI)
 		dockererrors.WriteBlobUploadInvalid(w)
 		return
 	}
 
 	switch {
 	case len(payload) == 0 && r.Method == http.MethodPut:
-		rh.handleFinalChunkUpload(w, r, namespace, repository, sessionId)
+		rh.handleLastBlobChunk(w, r, namespace, repository, sessionId)
 
 	case r.Method == http.MethodPatch:
-		rh.handleChunkedUpload(w, r, namespace, repository, sessionId, payload)
+		rh.handleBlobChunk(w, r, namespace, repository, sessionId, payload)
 
 	case r.Method == http.MethodPut:
-		rh.handleMonolithicUpload(w, r, namespace, repository, sessionId, payload)
+		rh.handleBlob(w, r, namespace, repository, sessionId, payload)
 	}
 }
 
-func (rh *RegistryHandler) handleFinalChunkUpload(
-	w http.ResponseWriter, r *http.Request,
-	namespace, repository, sessionId string,
-) {
+func (rh *RegistryHandler) handleLastBlobChunk(w http.ResponseWriter, r *http.Request,
+	namespace, repository, sessionID string) {
 	blobDigest := r.URL.Query().Get("digest")
 	if blobDigest == "" {
 		log.Logger().Warn().Msgf("Request aborted due to missing query param `digest` : %s", r.RequestURI)
@@ -182,31 +181,36 @@ func (rh *RegistryHandler) handleFinalChunkUpload(
 		return
 	}
 
-	err := rh.svc.persistImageBlobFinalChunk(namespace, repository, blobDigest, sessionId)
+	result, err := rh.svc.handleLastBlobChunk(r.Context(), namespace, repository, blobDigest, sessionID)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	writeBlobUploadSuccessResponse(w, r.URL.String(), sessionId, 0, 0)
+	if result.invalid {
+		dockererrors.WriteBlobUploadInvalid(w)
+		return
+	}
+
+	if result.partialUpload {
+		dockererrors.WriteBlobUploadNotFound(w)
+		return
+	}
+
+	writeBlobUploadSuccess(w, r.URL.String(), sessionID, 0, 0)
 }
 
-func (rh *RegistryHandler) handleChunkedUpload(
-	w http.ResponseWriter, r *http.Request,
-	namespace, repository, sessionId string, payload []byte,
-) {
-	firstChunk := false
+func (rh *RegistryHandler) handleBlobChunk(w http.ResponseWriter, r *http.Request,
+	namespace, repository, sessionID string, payload []byte) {
 	var start int64 = 0
 	var end int64 = 0
 	contentRange := r.Header.Get("Content-Range")
 
 	// Content-Range cannot be empty for second+ chunks
 	if contentRange == "" {
-		firstChunk = true
 		// correcting end
 		end = int64(len(payload))
-	}
-	if !firstChunk {
+	} else {
 		var err error
 		start, end, err = utils.ParseImageBlobContentRangeFromRequest(contentRange)
 		if err != nil {
@@ -214,29 +218,28 @@ func (rh *RegistryHandler) handleChunkedUpload(
 			dockererrors.WriteInvalidRange(w)
 			return
 		}
-		if len(payload) != int(end-start) {
-			log.Logger().Warn().Msgf("Partial chunk was received.")
-			dockererrors.WriteInvalidRange(w)
-			return
-		}
-	} else {
-		start = 0
 	}
 
-	location := utils.StorageLocation("blobs", rh.registryName, namespace, repository, sessionId)
-	err := rh.svc.storeImageBlob(location, true, start, payload)
+	result, err := rh.svc.uploadBlobChunk(r.Context(), namespace, repository, sessionID, start, payload)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	writeBlobUploadSuccessResponse(w, r.URL.String(), sessionId, int(start), int(end))
+	if result.invalid {
+		dockererrors.WriteBlobUploadInvalid(w)
+		return
+	}
+
+	if result.partialUpload {
+		dockererrors.WriteBlobUploadNotFound(w)
+		return
+	}
+	writeBlobUploadSuccess(w, r.URL.String(), sessionID, int(start), int(end))
 }
 
-func (rh *RegistryHandler) handleMonolithicUpload(
-	w http.ResponseWriter, r *http.Request,
-	namespace, repository, sessionId string, payload []byte,
-) {
+func (rh *RegistryHandler) handleBlob(w http.ResponseWriter, r *http.Request,
+	namespace, repository, sessionID string, payload []byte) {
 	blobDigest := r.URL.Query().Get("digest")
 	if blobDigest == "" {
 		log.Logger().Warn().Msgf("Request aborted due to missing query param `digest` : %s", r.RequestURI)
@@ -244,20 +247,25 @@ func (rh *RegistryHandler) handleMonolithicUpload(
 		return
 	}
 
-	err := rh.svc.persistImageBlob(namespace, repository, blobDigest, payload)
+	res, err := rh.svc.uploadBlobWhole(r.Context(), namespace, repository, sessionID, blobDigest, payload)
 	if err != nil {
 		log.Logger().Warn().Msgf("Request aborted due to errors")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	writeBlobUploadSuccessResponse(w, r.URL.Path, sessionId, 0, len(payload))
+	if res.invalid {
+		dockererrors.WriteBlobUploadInvalid(w)
+		return
+	}
+
+	writeBlobUploadSuccess(w, r.URL.Path, sessionID, 0, len(payload))
 }
 
-func (rh *RegistryHandler) GetImageBlob(w http.ResponseWriter, r *http.Request) {
+func (rh *RegistryHandler) getImageBlob(w http.ResponseWriter, r *http.Request) {
 	namespace, repository, digest := extractNamespaceRepositoryAndDigest(r)
 
-	exists, content, err := rh.svc.getImageBlob(namespace, repository, digest)
+	exists, content, err := rh.svc.getImageBlob(r.Context(), namespace, repository, digest)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -273,10 +281,10 @@ func (rh *RegistryHandler) GetImageBlob(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (rh *RegistryHandler) IsImageManifestPresent(w http.ResponseWriter, r *http.Request) {
+func (rh *RegistryHandler) manifestExists(w http.ResponseWriter, r *http.Request) {
 	namespace, repository, tagOrDigest := extractNamespaceRepositoryAndTagOrDigest(r)
 
-	exists, mediaType, digest, err := rh.svc.isImageManifestPresent(namespace, repository, tagOrDigest)
+	exists, mediaType, digest, err := rh.svc.manifestExists(r.Context(), namespace, repository, tagOrDigest)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -293,10 +301,10 @@ func (rh *RegistryHandler) IsImageManifestPresent(w http.ResponseWriter, r *http
 	w.WriteHeader(http.StatusOK)
 }
 
-func (rh *RegistryHandler) GetImageManifest(w http.ResponseWriter, r *http.Request) {
+func (rh *RegistryHandler) getManifest(w http.ResponseWriter, r *http.Request) {
 	namespace, repository, tagOrDigest := extractNamespaceRepositoryAndTagOrDigest(r)
 
-	exists, mediaType, digest, content, err := rh.svc.getImageManifest(namespace, repository, tagOrDigest)
+	exists, mediaType, digest, content, err := rh.svc.getImageManifest(r.Context(), namespace, repository, tagOrDigest)
 
 	if err != nil {
 
@@ -316,7 +324,7 @@ func (rh *RegistryHandler) GetImageManifest(w http.ResponseWriter, r *http.Reque
 	w.Write(content)
 }
 
-func (rh *RegistryHandler) UpdateManifest(w http.ResponseWriter, r *http.Request) {
+func (rh *RegistryHandler) updateManifest(w http.ResponseWriter, r *http.Request) {
 	if rh.registryId != HostedRegistryID {
 		dockererrors.WriteUnsupported(w)
 		return
@@ -337,7 +345,7 @@ func (rh *RegistryHandler) UpdateManifest(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	digest, err := rh.svc.updateManifest(namespace, repository, tag, contentType, content)
+	digest, err := rh.svc.updateManifest(r.Context(), namespace, repository, tag, contentType, content)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occured when updating manifest for request: %s", r.RequestURI)
 		return

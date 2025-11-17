@@ -11,7 +11,7 @@ func writeBlobExistsResponse(w http.ResponseWriter, digest string) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func writeBlobUploadSuccessResponse(w http.ResponseWriter, url, sessionId string, start, end int) {
+func writeBlobUploadSuccess(w http.ResponseWriter, url, sessionId string, start, end int) {
 	w.Header().Add("Location", url)
 	w.Header().Add("Range", fmt.Sprintf("%d-%d", start, end))
 	w.Header().Add("Docker-Upload-UUID", sessionId)

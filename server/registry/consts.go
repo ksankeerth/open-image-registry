@@ -11,3 +11,17 @@ const HostedRegistryName = "HostedRegistry"
 const DefaultNamespace = "library"
 
 const UnknownBlobMediaType = "unknown_media_type"
+
+const (
+	RegistryVendorDockerHub   = "docker_hub"
+	RegistryVendorGCR         = "gcr"
+	RegistryVendorECR         = "ecr"
+	RegistryVendorACR         = "acr"
+	RegistryVendorGHCR        = "ghcr"
+	RegistryVendorGitLab      = "gitlab"
+	RegistryVendorQuay        = "quay"
+	RegistryVendorHarbor      = "harbor"
+	RegistryVendorArtifactory = "artifactory"
+	RegistryVendorNexus       = "nexus"
+	RegistryVendorCustom      = "custom"
+)
