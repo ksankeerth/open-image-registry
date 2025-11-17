@@ -157,3 +157,15 @@ func (m *manifestStore) GetByDigest(ctx context.Context, withContent bool, repos
 
 	return &model, nil
 }
+
+func (m *manifestStore) DeleteByDigest(ctx context.Context, repositoryId, digest string) error {
+	q := m.getQuerier(ctx)
+
+	_, err := q.ExecContext(ctx, ManifestDeleteByDigest, repositoryId, digest)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("failed to delete manifest")
+		return dberrors.ClassifyError(err, ManifestDeleteByDigest)
+	}
+
+	return nil
+}

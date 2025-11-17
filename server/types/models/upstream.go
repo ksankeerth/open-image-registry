@@ -17,7 +17,7 @@ type UpstreamRegistry struct {
 type UpstreamRegistryAuthConfig struct {
 	RegistryID string
 	AuthType   string
-	ConfigJSON map[string]interface{}
+	ConfigJSON []byte
 	CreatedAt  time.Time
 	UpdatedAt  *time.Time
 }

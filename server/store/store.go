@@ -16,6 +16,7 @@ type Store interface {
 	Access() ResourceAccessStore
 	AccountRecovery() AccountRecoveryStore
 	Auth() AuthStore
+	Upstreams() UpstreamRegistyStore
 
 	// Queries
 	ImageQueries() ImageQueries

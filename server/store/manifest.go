@@ -12,5 +12,7 @@ type ManifestStore interface {
 
 	GetByUniqueDigest(ctx context.Context, withContent bool, repositoryId, digest string) (*models.ImageManifestModel, error)
 
-	GetByDigest(ctx context.Context, withContent bool, epositoryId, digest string) (*models.ImageManifestModel, error)
+	GetByDigest(ctx context.Context, withContent bool, repositoryId, digest string) (*models.ImageManifestModel, error)
+
+	DeleteByDigest(ctx context.Context, repositoryId, digest string) error
 }

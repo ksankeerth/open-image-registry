@@ -91,6 +91,9 @@ func CombineAndCalculateSHA256Digest(inputs ...string) string {
 }
 
 func ParseSqliteTimestamp(timeStr string) (*time.Time, error) {
+	if timeStr == "" {
+		return nil, nil
+	}
 	// Strip monotonic clock part if present (e.g. "2025-09-05 11:41:39.976848 +0530 +0530 m=+339.588692899")
 	timeStr = strings.SplitN(timeStr, " m=", 2)[0]
 

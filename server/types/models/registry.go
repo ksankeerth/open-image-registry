@@ -37,6 +37,15 @@ type ImageBlobMetaModel struct {
 	UpdatedAt    *time.Time
 }
 
+type ImageBlobUploadSessionModel struct {
+	SessionID     string
+	Namespace     string
+	Repository    string
+	BytesReceived int
+	CreatedAt     time.Time
+	UpdatedAt     *time.Time
+}
+
 type ImageManifestModel struct {
 	ID           string
 	Digest       string
