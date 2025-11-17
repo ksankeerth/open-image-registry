@@ -34,11 +34,17 @@ type Config struct {
 
 	MaxRetries             int
 	RetryDelay             time.Duration
-	RetryBackOffMultiplier float64
+	RetryBackOffMultiplier float32
 
 	// debug configuration
 	LogHeaders bool
 	LogBody    bool
+}
+
+type AuthConfig struct {
+	Username      string `json:"username"`
+	Credential    string `json:"credential"` // this could be password or PAT
+	TokenEndpoint string `json:"token_endpoint"`
 }
 
 type loginResponse struct {
@@ -55,7 +61,7 @@ type dockerClient struct {
 	httpClient *http.Client
 }
 
-func New(cfg *Config) upstream.UpstreamClient {
+func NewClient(cfg *Config) upstream.UpstreamClient {
 	if cfg == nil {
 		cfg = &Config{}
 	}
@@ -454,7 +460,7 @@ func (d *dockerClient) doWithRetry(req *http.Request) (*http.Response, error) {
 				Str("url", req.URL.String()).
 				Msg("Retrying request")
 			time.Sleep(delay)
-			delay = time.Duration(float64(delay) * d.config.RetryBackOffMultiplier)
+			delay = time.Duration((float32(delay) * d.config.RetryBackOffMultiplier) * float32(time.Second))
 		}
 
 		reqClone := req.Clone(context.Background())
