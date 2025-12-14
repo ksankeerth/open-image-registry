@@ -77,3 +77,4 @@ Since the project is currently under development, many features may change quick
 We have some guides which will supports how the features will evoles. You can refer to guides below.
 
 - [User Management](./docs/user-management.md)
+- [Access Management](./docs/access-management.md)
