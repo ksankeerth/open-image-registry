@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/ksankeerth/open-image-registry/errors/dberrors"
 	"github.com/ksankeerth/open-image-registry/log"
@@ -195,8 +196,9 @@ func (u *userStore) GetByUsername(ctx context.Context, username string) (*models
 	q := u.getQuerier(ctx)
 
 	var m models.UserAccount
-	var createdAt, updatedAt, lockedAt string
+	var createdAt, updatedAt string
 	var locked int
+	var lockedAt sql.NullString
 
 	row := q.QueryRowContext(ctx, UserGetUserAccountByUsernameQuery, username)
 
@@ -227,7 +229,7 @@ func (u *userStore) GetByUsername(ctx context.Context, username string) (*models
 		return nil, dberrors.ClassifyError(err, UserGetUserAccountByUsernameQuery)
 	}
 
-	m.LockedAt, err = utils.ParseSqliteTimestamp(lockedAt)
+	m.LockedAt, err = utils.ParseSqliteTimestamp(lockedAt.String)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("failed to retrieve user")
 		return nil, dberrors.ClassifyError(err, UserGetUserAccountByUsernameQuery)
@@ -457,4 +459,24 @@ func (u *userStore) UnAssignRole(ctx context.Context, userId string) error {
 	}
 
 	return nil
+}
+
+func (u *userStore) AreAccountsActive(ctx context.Context, userIds []string) (valid bool, err error) {
+	q := u.getQuerier(ctx)
+
+	placeHolders := "( " + strings.Repeat("?, ", len(userIds)-1) + " )"
+	query := fmt.Sprintf(UserCountActiveAccountByIdsQuery, placeHolders)
+
+	var validAccounts int
+	err = q.QueryRowContext(ctx, query, userIds).Scan(&validAccounts)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Logger().Warn().Msg("none of user accounts are valid")
+			return false, nil
+		}
+		log.Logger().Error().Err(err).Msg("failed to validate user accounts")
+		return false, dberrors.ClassifyError(err, query)
+	}
+
+	return validAccounts == len(userIds), nil
 }
