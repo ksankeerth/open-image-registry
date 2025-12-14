@@ -81,7 +81,7 @@ export type TablePaginationState = {
 
 export type TableColumnFilterState<T, K extends keyof T = keyof T> = {
   key: keyof T;
-  values:  T[K][]; // equal filter only for simplicity
+  values: T[K][]; // equal filter only for simplicity
 }
 
 export type TableFilterSearchPaginationSortState<T> = {
@@ -90,3 +90,84 @@ export type TableFilterSearchPaginationSortState<T> = {
   filters?: TableColumnFilterState<T>[];
   search_value?: string;
 };
+
+
+export type MenuItem = {
+  name: string;
+  key: string;
+  description: string;
+  nav_link: string;
+  icon_class?: string;
+  collapsed?: boolean;
+  children: MenuItem[];
+};
+
+type UserAccess = {
+  maintainers: number;
+  guests: number;
+  developers: number;
+};
+
+type RepositoryStats = {
+  total: number;
+  restricted: number;
+  deprecated: number;
+  active: number;
+  disabled: number;
+};
+
+export type NamespaceInfo = {
+  id: string;
+  name: string;
+  is_public: boolean;
+  type: 'project' | 'team';
+  state: 'active' | 'deprecated' | 'disabled';
+  description: string;
+  created_at: Date;
+  created_by: string;
+  updated_at?: Date;
+  user_access: UserAccess;
+  repositories: RepositoryStats;
+};
+
+export type UserAccessInfo = {
+  username: string;
+  user_id: string;
+  user_role: 'maintainer' | 'developer' | 'guest'
+  resource_type: 'namespace' | 'repository' | 'upstream_registry'
+  resource_id: string;
+  access_level: 'maintainer' | 'developer' | 'guest'
+  granted_by: string;
+  granted_at: Date;
+}
+
+export type RepositoryUserAccessInfo = UserAccessInfo & { is_inherited: boolean };
+
+export type NamespaceRepositoryInfo = {
+  name: string;
+  id: string;
+  namesapce: string;
+  namespace_id: string;
+  created_at: Date;
+  created_by: string;
+  tags_count: string;
+  state: 'active' | 'deprecated' | 'disabled';
+}
+
+export type ChangeTrackerEventInfo = {
+  id: string;
+  timestamp: Date;
+  type: 'add' | 'change' | 'delete';
+  message: string;
+}
+
+export type RepositoryTagInfo = {
+  namespace_id: string;
+  repository_id: string;
+  tag_id: string;
+  tag: string;
+  last_pushed: Date;
+  stable: boolean;
+  platform_os: string;
+  platform_arch: string;
+}

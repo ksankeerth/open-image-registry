@@ -252,3 +252,16 @@ export type AccountSetupCompleteRequest = {
   password: string;
   uuid: string;
 };
+
+export type CreateNamespaceRequest = {
+  name: string;
+  description: string;
+  is_public: boolean;
+  purpose: 'team' | 'project'
+  maintainers: string[];
+}
+
+export type CreateNamespaceResponse = {
+  id: string;
+  error_message?: string;
+}
