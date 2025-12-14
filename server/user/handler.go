@@ -6,10 +6,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/ksankeerth/open-image-registry/client/email"
-	"github.com/ksankeerth/open-image-registry/db"
 	"github.com/ksankeerth/open-image-registry/errors/httperrors"
 	"github.com/ksankeerth/open-image-registry/lib"
 	"github.com/ksankeerth/open-image-registry/log"
+	"github.com/ksankeerth/open-image-registry/store"
 	"github.com/ksankeerth/open-image-registry/types/api/v1alpha/mgmt"
 	"github.com/ksankeerth/open-image-registry/utils"
 )
@@ -20,14 +20,12 @@ type UserAPIHandler struct {
 }
 
 // NewUserAPIHandler creates a new user API handler
-func NewUserAPIHandler(userDao db.UserDAO, accessDao db.ResourceAccessDAO,
-	emailClient *email.EmailClient) *UserAPIHandler {
+func NewUserAPIHandler(store store.Store, emailClient *email.EmailClient) *UserAPIHandler {
 	return &UserAPIHandler{
 		svc: &userService{
-			userDao:   userDao,
-			accessDao: accessDao,
-			adapter:   &UserAdapter{},
-			ec:        emailClient,
+			store:   store,
+			adapter: &UserAdapter{},
+			ec:      emailClient,
 		},
 	}
 }
@@ -35,7 +33,7 @@ func NewUserAPIHandler(userDao db.UserDAO, accessDao db.ResourceAccessDAO,
 // ListUsers handles GET /api/v1/users
 func (h *UserAPIHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
-	cond := lib.ParseListConditions(r)
+	cond := lib.ParseListConditions(r, map[string]store.FilterOperator{})
 
 	ok, errMsg := ValidateListUserCondition(cond)
 	if !ok {
@@ -52,8 +50,8 @@ func (h *UserAPIHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	res := mgmt.ListUsersResponse{
 		Total: total,
-		Page:  int(cond.Pagination.Page),
-		Limit: int(cond.Pagination.Limit),
+		Page:  int(cond.Page),
+		Limit: int(cond.Limit),
 		Users: make([]*mgmt.UserAccountViewDTO, len(users)),
 	}
 
@@ -86,7 +84,7 @@ func (h *UserAPIHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userId, conflict, err := h.svc.createUserAccount(reqBody.Username, reqBody.Email, reqBody.DisplayName, reqBody.Role)
+	userId, conflict, recoveryUuid, err := h.svc.createUserAccount(reqBody.Username, reqBody.Email, reqBody.DisplayName, reqBody.Role)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Request aborted due to errors")
 		httperrors.InternalError(w, 500, "")
@@ -105,6 +103,9 @@ func (h *UserAPIHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	if recoveryUuid != "" {
+		w.Header().Set("Account-Setup-Id", recoveryUuid)
+	}
 	w.WriteHeader(http.StatusCreated)
 	err = json.NewEncoder(w).Encode(&res)
 	if err != nil {
@@ -250,18 +251,13 @@ func (h *UserAPIHandler) UpdateUserEmail(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	updated, err := h.svc.updateUserEmail(userId, reqBody.Email)
+	err = h.svc.updateUserEmail(userId, reqBody.Email)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
 		httperrors.InternalError(w, 500, "Request aborted due to errors")
 		return
 	}
-
-	if updated {
-		w.WriteHeader(http.StatusOK)
-	} else {
-		w.WriteHeader(http.StatusInternalServerError)
-	}
+	w.WriteHeader(http.StatusOK)
 }
 
 // UpdateUserDisplayName handles PUT /api/v1/users/{id}/display-name
@@ -288,35 +284,26 @@ func (h *UserAPIHandler) UpdateUserDisplayName(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	updated, err := h.svc.updateUserDisplayName(userId, reqBody.DisplayName)
+	err = h.svc.updateUserDisplayName(userId, reqBody.DisplayName)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
 		httperrors.InternalError(w, 500, "Request aborted due to errors")
 		return
 	}
-
-	if updated {
-		w.WriteHeader(http.StatusOK)
-	} else {
-		w.WriteHeader(http.StatusInternalServerError)
-	}
+	w.WriteHeader(http.StatusOK)
 }
 
 // DeleteUser handles DELETE /api/v1/users/{id}
 func (h *UserAPIHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	userId := chi.URLParam(r, "id")
 
-	deleted, err := h.svc.deleteUserAccount(userId)
+	err := h.svc.deleteUserAccount(userId)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Request aborted due to errors")
 		httperrors.InternalError(w, 500, "Request aborted due to database errors")
 		return
 	}
-	if deleted {
-		w.WriteHeader(http.StatusOK)
-	} else {
-		httperrors.InternalError(w, 500, "Unexpected errors occurred.")
-	}
+	w.WriteHeader(http.StatusOK)
 }
 
 // ChangePassword handles PUT /api/v1/users/{id}/password
@@ -353,78 +340,79 @@ func (h *UserAPIHandler) ChangePassword(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// TODO: currently, We don't have any UI to show user-namespaces. Later, We have to develop this.
 // GetUserNamespaces handles GET /api/v1/users/{id}/namespaces
-func (h *UserAPIHandler) GetUserNamespaces(w http.ResponseWriter, r *http.Request) {
-	userId := chi.URLParam(r, "id")
+// func (h *UserAPIHandler) GetUserNamespaces(w http.ResponseWriter, r *http.Request) {
+// 	userId := chi.URLParam(r, "id")
 
-	username, namespaceAccess, err := h.svc.getUserNamespaceAccess(userId)
-	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
-		httperrors.InternalError(w, 500, "Request aborted due to errors")
-		return
-	}
+// 	username, namespaceAccess, err := h.svc.getUserNamespaceAccess(userId)
+// 	if err != nil {
+// 		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
+// 		httperrors.InternalError(w, 500, "Request aborted due to errors")
+// 		return
+// 	}
 
-	if username == "" && namespaceAccess == nil {
-		httperrors.NotFound(w, 404, "No namespace was found")
-		return
-	}
+// 	if username == "" && namespaceAccess == nil {
+// 		httperrors.NotFound(w, 404, "No namespace was found")
+// 		return
+// 	}
 
-	accessList := make([]*mgmt.NamespaceAccess, len(namespaceAccess))
+// 	accessList := make([]*mgmt.NamespaceAccess, len(namespaceAccess))
 
-	for _, access := range namespaceAccess {
-		dto := h.adapter.ToNamespaceAccess(access)
-		accessList = append(accessList, dto)
-	}
+// 	for _, access := range namespaceAccess {
+// 		dto := h.adapter.ToNamespaceAccess(access)
+// 		accessList = append(accessList, dto)
+// 	}
 
-	res := mgmt.UserNamespaceAccessResponse{
-		Username:   username,
-		AccessList: accessList,
-	}
+// 	res := mgmt.UserNamespaceAccessResponse{
+// 		Username:   username,
+// 		AccessList: accessList,
+// 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(res)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Error occurred when writing response to get user namespace request")
-	}
-}
+// 	w.Header().Set("Content-Type", "application/json")
+// 	w.WriteHeader(http.StatusOK)
+// 	err = json.NewEncoder(w).Encode(res)
+// 	if err != nil {
+// 		log.Logger().Error().Err(err).Msg("Error occurred when writing response to get user namespace request")
+// 	}
+// }
 
 // GetUserRepositories handles GET /api/v1/users/{id}/repositories
-func (h *UserAPIHandler) GetUserRepositories(w http.ResponseWriter, r *http.Request) {
-	userId := chi.URLParam(r, "id")
+// func (h *UserAPIHandler) GetUserRepositories(w http.ResponseWriter, r *http.Request) {
+// 	userId := chi.URLParam(r, "id")
 
-	username, repositoryAccess, err := h.svc.getUserRepositoryAccess(userId)
-	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
-		httperrors.InternalError(w, 500, "Request aborted due to errors")
-		return
-	}
+// 	username, repositoryAccess, err := h.svc.getUserRepositoryAccess(userId)
+// 	if err != nil {
+// 		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
+// 		httperrors.InternalError(w, 500, "Request aborted due to errors")
+// 		return
+// 	}
 
-	if username == "" && repositoryAccess == nil {
-		httperrors.NotFound(w, 404, "No namespace was found")
-		return
-	}
+// 	if username == "" && repositoryAccess == nil {
+// 		httperrors.NotFound(w, 404, "No namespace was found")
+// 		return
+// 	}
 
-	accessList := make([]*mgmt.RepositoryAccess, len(repositoryAccess))
+// 	accessList := make([]*mgmt.RepositoryAccess, len(repositoryAccess))
 
-	for _, access := range repositoryAccess {
-		dto := h.adapter.ToRepositoryAccess(access)
-		accessList = append(accessList, dto)
-	}
+// 	for _, access := range repositoryAccess {
+// 		dto := h.adapter.ToRepositoryAccess(access)
+// 		accessList = append(accessList, dto)
+// 	}
 
-	res := mgmt.UserRepositoryAccessResponse{
-		Username:   username,
-		AccessList: accessList,
-	}
+// 	res := mgmt.UserRepositoryAccessResponse{
+// 		Username:   username,
+// 		AccessList: accessList,
+// 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(res)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Error occurred when writing response to get user repository request")
-	}
+// 	w.Header().Set("Content-Type", "application/json")
+// 	w.WriteHeader(http.StatusOK)
+// 	err = json.NewEncoder(w).Encode(res)
+// 	if err != nil {
+// 		log.Logger().Error().Err(err).Msg("Error occurred when writing response to get user repository request")
+// 	}
 
-}
+// }
 
 // GetCurrentUser handles GET /api/v1/users/me
 func (h *UserAPIHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
@@ -434,66 +422,6 @@ func (h *UserAPIHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) 
 // UpdateCurrentUser handles PUT /api/v1/users/me
 func (h *UserAPIHandler) UpdateCurrentUser(w http.ResponseWriter, r *http.Request) {
 	// Implementation needed
-}
-
-// AssignRole handles POST /api/v1/users/{id}/role
-func (h *UserAPIHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
-	var reqBody mgmt.AssignRoleRequest
-
-	err := json.NewDecoder(r.Body).Decode(&reqBody)
-	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Error occurred when parsing request: %s", r.RequestURI)
-		httperrors.BadRequest(w, 400, "Invalid body")
-		return
-	}
-
-	if reqBody.UserId == "" {
-		httperrors.BadRequest(w, 400, "Invalid user_id")
-		return
-	}
-	if reqBody.RoleName == "" {
-		httperrors.BadRequest(w, 400, "Invalid role_name")
-		return
-	}
-
-	err = h.svc.assignRoleToUser(reqBody.UserId, reqBody.RoleName)
-	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
-		httperrors.InternalError(w, 500, "Request aborted due to errors")
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-}
-
-// RemoveRole handles DELETE /api/v1/users/{id}/role/{role}
-func (h *UserAPIHandler) RemoveRole(w http.ResponseWriter, r *http.Request) {
-	var reqBody mgmt.UnassignRoleRequest
-
-	err := json.NewDecoder(r.Body).Decode(&reqBody)
-	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Error occurred when parsing the request: %s", r.RequestURI)
-		httperrors.BadRequest(w, 400, "Invalid body")
-		return
-	}
-
-	if reqBody.UserId == "" {
-		httperrors.BadRequest(w, 400, "Invalid user_id")
-		return
-	}
-	if reqBody.RoleName == "" {
-		httperrors.BadRequest(w, 400, "Invalid role_name")
-		return
-	}
-
-	err = h.svc.unassignRoleFromUser(reqBody.UserId, reqBody.RoleName)
-	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
-		httperrors.InternalError(w, 500, "Request aborted due to errors")
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
 }
 
 // LockUser handles PUT /api/v1/users/{id}/lock
@@ -599,12 +527,10 @@ func (h *UserAPIHandler) Routes() chi.Router {
 		r.Put("/{id}", h.UpdateUser)
 		r.Put("/{id}/lock", h.LockUser)
 		r.Put("/{id}/unlock", h.UnlockUser)
-		r.Get("/{id}/namespaces", h.GetUserNamespaces)
-		r.Get("/{id}/repositories", h.GetUserRepositories)
+		// r.Get("/{id}/namespaces", h.GetUserNamespaces)
+		// r.Get("/{id}/repositories", h.GetUserRepositories)
 		r.Get("/me", h.GetCurrentUser)
 		r.Put("/me", h.UpdateCurrentUser)
-		r.Put("/{id}/role", h.AssignRole)
-		r.Delete("/{id}/role/{role}", h.RemoveRole)
 		// r.Get("/{id}/role", h.GetUserRole)
 		// r.Get("/{id}", h.GetUser) TODO: We'll think about this response type later
 		r.Delete("/{id}", h.DeleteUser)

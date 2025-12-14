@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/ksankeerth/open-image-registry/constants"
+	"github.com/ksankeerth/open-image-registry/store"
 	"github.com/ksankeerth/open-image-registry/types/api/v1alpha/mgmt"
-	"github.com/ksankeerth/open-image-registry/types/query"
 	"github.com/ksankeerth/open-image-registry/utils"
 )
 
@@ -22,7 +23,8 @@ func ValidateCreateUserAccount(req *mgmt.CreateUserAccountRequest) (bool, string
 		return false, "Role is not set"
 	}
 
-	if !(req.Role == RoleAdmin || req.Role == RoleMaintainer || req.Role == RoleDeveloper || req.Role == RoleGuest) {
+	if !(req.Role == constants.RoleAdmin || req.Role == constants.RoleMaintainer || req.Role == constants.RoleDeveloper ||
+		req.Role == constants.RoleGuest) {
 		return false, fmt.Sprintf("Invalid role: %s", req.Role)
 	}
 
@@ -46,7 +48,8 @@ func ValidateUpdateUserAccount(req *mgmt.UpdateUserAccountRequest) (bool, string
 	}
 
 	if req.Role != "" {
-		if !(req.Role == RoleAdmin || req.Role == RoleDeveloper || req.Role == RoleGuest || req.Role == RoleMaintainer) {
+		if !(req.Role == constants.RoleAdmin || req.Role == constants.RoleDeveloper || req.Role == constants.RoleGuest ||
+			req.Role == constants.RoleMaintainer) {
 			return false, "Invalid Role"
 		}
 	}
@@ -76,19 +79,19 @@ func ValidateUserValidateRequest(req *mgmt.UsernameEmailValidationRequest) (bool
 	return true, ""
 }
 
-func ValidateListUserCondition(cond *query.ListModelsConditions) (bool, string) {
+func ValidateListUserCondition(cond *store.ListQueryConditions) (bool, string) {
 
-	if cond.Sort.Field != "" && !slices.Contains(AllowedUserSortFields, cond.Sort.Field) {
-		return false, fmt.Sprintf("Not allowed sort fied: %s", cond.Sort.Field)
+	if cond.SortField != "" && !slices.Contains(constants.AllowedUserSortFields, cond.SortField) {
+		return false, fmt.Sprintf("Not allowed sort fied: %s", cond.SortField)
 	}
 
 	for _, f := range cond.Filters {
-		if !slices.Contains(AllowedUserFilterFields, f.Field) {
+		if !slices.Contains(constants.AllowedUserFilterFields, f.Field) {
 			return false, fmt.Sprintf("Not allowed filter fied: %s", f.Field)
 		}
 
 		if f.Field == "locked" && len(f.Values) != 1 {
-			return false, fmt.Sprintf("Boolean value is only accepted for field `locked`: %v", f.Values...)
+			return false, fmt.Sprintf("Boolean value is only accepted for field `locked`: %v", f.Values)
 		}
 	}
 

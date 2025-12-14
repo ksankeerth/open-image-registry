@@ -1,25 +1,24 @@
 package user
 
 import (
-	"fmt"
+	"context"
 	"sync"
 
 	"github.com/google/uuid"
 	"github.com/ksankeerth/open-image-registry/client/email"
 	"github.com/ksankeerth/open-image-registry/config"
-	"github.com/ksankeerth/open-image-registry/db"
-	db_errors "github.com/ksankeerth/open-image-registry/errors/db"
+	"github.com/ksankeerth/open-image-registry/constants"
+	"github.com/ksankeerth/open-image-registry/errors/dberrors"
 	"github.com/ksankeerth/open-image-registry/security"
+	"github.com/ksankeerth/open-image-registry/store"
 
 	"github.com/ksankeerth/open-image-registry/log"
 	"github.com/ksankeerth/open-image-registry/types/api/v1alpha/mgmt"
 	"github.com/ksankeerth/open-image-registry/types/models"
-	"github.com/ksankeerth/open-image-registry/types/query"
 )
 
 type userService struct {
-	userDao       db.UserDAO
-	accessDao     db.ResourceAccessDAO
+	store         store.Store
 	ec            *email.EmailClient
 	adapter       *UserAdapter
 	userIdNameMap sync.Map // for now, we'll sync.Map, later we have to use map with Mutex
@@ -31,33 +30,40 @@ func (svc *userService) getUsername(userId string) (string, error) {
 		return val.(string), nil
 	}
 
-	username, err := svc.userDao.GetUsernameById(userId, "")
-	if err != nil || username == "" {
+	user, err := svc.store.Users().Get(context.Background(), userId)
+	if err != nil {
 		return "", err
 	}
+	if user == nil {
+		return "", nil
+	}
+	username := user.Username
 
 	svc.userIdNameMap.Store(userId, username)
 
 	return username, nil
 }
 
-func (svc *userService) getUserList(cond *query.ListModelsConditions) (users []*models.UserAccountView, total int, err error) {
-	//TODO: https://github.com/ksankeerth/open-image-registry/issues/6
-	txKey := fmt.Sprintf("get-user-list-%d", cond.Pagination.Page)
+func (svc *userService) getUserList(cond *store.ListQueryConditions) (users []*models.UserAccountView, total int, err error) {
 
-	err = svc.userDao.Begin(txKey)
+	ctx := context.Background()
+	tx, err := svc.store.Begin(ctx)
 	if err != nil {
+		log.Logger().Error().Err(err).Msg("error occurred when starting transaction")
 		return nil, -1, err
 	}
+
 	defer func() {
 		if err != nil {
-			svc.userDao.Rollback(txKey)
+			tx.Rollback()
 		} else {
-			svc.userDao.Commit(txKey)
+			tx.Commit()
 		}
 	}()
 
-	users, total, err = svc.userDao.ListUserAccounts(cond, txKey)
+	ctx = store.WithTxContext(ctx, tx)
+
+	users, total, err = svc.store.Users().ListUserAccounts(ctx, cond)
 	if err != nil {
 		return nil, -1, err
 	}
@@ -65,51 +71,44 @@ func (svc *userService) getUserList(cond *query.ListModelsConditions) (users []*
 	return
 }
 
-func (svc *userService) createUserAccount(username, email, displayName, role string) (userId string, conflict bool, err error) {
-	txKey := fmt.Sprintf("create-user-account-%s-%s", username, email)
+// createUserAccount returns passwordRecoveryUUID only if development mode is enabled
+func (svc *userService) createUserAccount(username, email, displayName, role string) (userId string, conflict bool, passwordRecoveryId string, err error) {
 
-	err = svc.userDao.Begin(txKey)
+	ctx := context.Background()
+	tx, err := svc.store.Begin(ctx)
 	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Error occurred when starting db transaction")
-		return
+		log.Logger().Error().Err(err).Msg("error occurred when starting transaction")
+		return "", false, "", err
 	}
 
 	defer func() {
-		var err1 error
 		if err != nil {
-			err1 = svc.userDao.Rollback(txKey)
+			tx.Rollback()
 		} else {
-			err1 = svc.userDao.Commit(txKey)
-		}
-		if err1 != nil {
-			log.Logger().Error().Err(err).Msgf("Error occurred when finishing the transaction")
+			tx.Commit()
 		}
 	}()
 
 	if displayName == "" {
-		displayName = DisplayNameNotSet
+		displayName = constants.DisplayNameNotSet
 	}
 
-	userId, err = svc.userDao.CreateUserAccount(username, email, displayName, PasswordNotSet, SaltNotSet, txKey)
+	userId, err = svc.store.Users().Create(ctx, username, email, displayName, constants.PasswordNotSet, constants.SaltNotSet)
 	if err != nil {
-		if yes, _ := db_errors.IsUniqueConstraint(err); yes {
-			return "", true, nil
+		if yes, _ := dberrors.IsUniqueConstraint(err); yes {
+			return "", true, "", nil
 		}
 		log.Logger().Error().Err(err).Msgf("Error occurred when creating user account: %s", username)
 		return
 	}
 
-	locked, err := svc.userDao.LockUserAccount(username, ReasonLockedNewAccountVerficationRequired, txKey)
+	err = svc.store.Users().LockAccount(ctx, username, constants.ReasonLockedNewAccountVerficationRequired)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occurred when locking new user account: %s", username)
 		return
 	}
-	if !locked {
-		log.Logger().Warn().Msgf("Locking new user account was not successful: %s", username)
-		return "", false, fmt.Errorf("locking user account failed")
-	}
 
-	err = svc.userDao.AssignUserRole(role, userId, txKey)
+	err = svc.store.Users().AssignRole(ctx, role, userId)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occurred when assigning role to new user account: %s", username)
 		return
@@ -128,53 +127,61 @@ func (svc *userService) createUserAccount(username, email, displayName, role str
 		return
 	}
 
-	err = svc.userDao.PersistPasswordRecovery(userId, recoveryUuid, ReasonPasswordRecoveryNewAccountSetup, txKey)
+	err = svc.store.AccountRecovery().Create(ctx, userId, recoveryUuid, constants.ReasonPasswordRecoveryNewAccountSetup)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Account initialization of new user acccount: %s has been failed", username)
 		return
 	}
 
+	// this will be set only if development config is enabled.
+	if config.GetDevelopmentConfig().Enable {
+		passwordRecoveryId = recoveryUuid
+	}
 	return
 }
 
 func (svc *userService) updateUserAccount(userId, email, displayName, role string) error {
-	txKey := fmt.Sprintf("update-user-account-%s-%s-%s-%s", userId, email, displayName, role)
 
-	err := svc.userDao.Begin(txKey)
+	ctx := context.Background()
+	tx, err := svc.store.Begin(ctx)
 	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Unable to start transaction for key: %s", txKey)
+		log.Logger().Error().Err(err).Msg("Error occurred when starting transaction")
 		return err
 	}
+
 	defer func() {
 		if err != nil {
-			svc.userDao.Rollback(txKey)
+			tx.Rollback()
 		} else {
-			svc.userDao.Commit(txKey)
+			tx.Commit()
 		}
 	}()
 
-	err = svc.userDao.UpdateUserAccount(userId, email, displayName, txKey)
+	ctx = store.WithTxContext(ctx, tx)
+
+	err = svc.store.Users().Update(ctx, userId, email, displayName)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Updating user account failed: %s", userId)
 		return err
 	}
 
-	err = svc.userDao.RemoveUserRoleAssignment(userId, txKey)
+	err = svc.store.Users().UnAssignRole(ctx, userId)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Removing role assignment from user: %s failed", userId)
 		return err
 	}
 
-	err = svc.userDao.AssignUserRole(role, userId, txKey)
+	err = svc.store.Users().AssignRole(ctx, role, userId)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Assigning role(%s) to user(%s) failed", role, userId)
 		return err
 	}
+
 	return nil
 }
 
 func (svc *userService) validateUser(username, email string) (usernameAvailable, emailAvailable bool, err error) {
-	return svc.userDao.ValidateUsernameAndEmail(username, email, "")
+	return svc.store.Users().CheckAvailability(context.Background(), username, email)
 }
 
 type changePasswordResult struct {
@@ -186,7 +193,22 @@ type changePasswordResult struct {
 }
 
 func (svc *userService) changePassword(req *mgmt.PasswordChangeRequest) (res *changePasswordResult, err error) {
-	txKey := fmt.Sprintf("user-change-password-%s-%s", req.UserId, req.RecoveryId)
+	ctx := context.Background()
+	tx, err := svc.store.Begin(ctx)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Error occurred when starting transaction")
+		return nil, err
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	ctx = store.WithTxContext(ctx, tx)
 
 	res = &changePasswordResult{
 		invalidId:          false,
@@ -195,22 +217,7 @@ func (svc *userService) changePassword(req *mgmt.PasswordChangeRequest) (res *ch
 		invalidUserAccount: false,
 	}
 
-	err = svc.userDao.Begin(txKey)
-	if err != nil {
-		return res, err
-	}
-
-	defer func() {
-		if err != nil {
-			err1 := svc.userDao.Rollback(txKey)
-			log.Logger().Error().Err(err1).Msgf("Rollback failed with errors: %s", txKey)
-		} else {
-			err1 := svc.userDao.Commit(txKey)
-			log.Logger().Error().Err(err1).Msgf("Commit failed with errors: %s", txKey)
-		}
-	}()
-
-	pwRecovery, err := svc.userDao.RetrivePasswordRecovery(req.UserId, txKey)
+	pwRecovery, err := svc.store.AccountRecovery().GetByUserID(ctx, req.UserId)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occurred retriving password recovery record with uuid: %s", req.RecoveryId)
 		return res, err
@@ -221,8 +228,8 @@ func (svc *userService) changePassword(req *mgmt.PasswordChangeRequest) (res *ch
 		return res, nil
 	}
 
-	currPwHash, salt, err := svc.userDao.GetUserPasswordAndSaltById(pwRecovery.UserId, txKey)
-	if db_errors.IsNotFound(err) {
+	currPwHash, salt, err := svc.store.Users().GetPasswordAndSalt(ctx, pwRecovery.UserID)
+	if dberrors.IsNotFound(err) {
 		res.invalidUserAccount = true
 		return
 	}
@@ -243,115 +250,68 @@ func (svc *userService) changePassword(req *mgmt.PasswordChangeRequest) (res *ch
 	}
 	newPasswordHash := security.GeneratePasswordHash(req.Password, newSalt)
 
-	updated, err := svc.userDao.UpdateUserPasswordAndSalt(pwRecovery.UserId, newPasswordHash, newSalt, txKey)
+	err = svc.store.Users().UpdatePasswordAndSalt(ctx, pwRecovery.UserID, newPasswordHash, newSalt)
+	if err != nil {
+		return
+	}
+	res.changed = true
+
+	err = svc.store.AccountRecovery().DeleteByUserID(ctx, pwRecovery.UserID)
 	if err != nil {
 		return
 	}
 
-	if updated {
-		res.changed = true
-	}
-
-	deleted, err := svc.userDao.DeletePasswordRecovery(pwRecovery.UserId, txKey)
-	if err != nil {
-		return
-	}
-
-	if !deleted {
-		log.Logger().Warn().Msgf("Password recovery record: %s is not cleared", pwRecovery.RecoveryId)
-	}
-	return
+	return res, err
 }
 
 func (svc *userService) getUserAccount(userId string) (*models.UserAccount, error) {
-	return svc.userDao.GetUserAccountById(userId, "")
+	return svc.store.Users().Get(context.Background(), userId)
 }
 
-func (svc *userService) deleteUserAccount(userId string) (deleted bool, err error) {
-	return svc.userDao.DeleteUserAccount(userId, "")
+func (svc *userService) deleteUserAccount(userId string) (err error) {
+	return svc.store.Users().Delete(context.Background(), userId)
 }
 
 // TODO: for we'll just update the email address in database. Later, We have to verify the email
 // address change by sending a mail
-func (svc *userService) updateUserEmail(userId, email string) (updated bool, err error) {
-	return svc.userDao.UpdateUserEmail(userId, email, "")
+func (svc *userService) updateUserEmail(userId, email string) (err error) {
+	return svc.store.Users().UpdateEmail(context.Background(), userId, email)
 }
 
-func (svc *userService) updateUserDisplayName(userId, displayName string) (updated bool, err error) {
-	return svc.userDao.UpdateUserDisplayName(userId, displayName, "")
-}
-
-func (svc *userService) getUserNamespaceAccess(userId string) (username string,
-	access []*models.NamespaceAccess, err error) {
-
-	access, err = svc.accessDao.GetUserNamespaceAccess(userId, "")
-	if err != nil {
-		return "", nil, err
-	}
-
-	username, err = svc.getUsername(userId)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return username, access, nil
-}
-
-func (svc *userService) getUserRepositoryAccess(userId string) (username string,
-	access []*models.RepositoryAccess, err error) {
-	access, err = svc.accessDao.GetUserRepositoryAccess(userId, "")
-	if err != nil {
-		return "", nil, err
-	}
-
-	username, err = svc.getUsername(userId)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return username, access, nil
+func (svc *userService) updateUserDisplayName(userId, displayName string) (err error) {
+	return svc.store.Users().UpdateDisplayName(context.Background(), userId, displayName)
 }
 
 func (svc *userService) assignRoleToUser(userId, roleName string) (err error) {
-	txKey := fmt.Sprintf("assign-user-role-%s-%s", userId, roleName)
-
-	err = svc.userDao.Begin(txKey)
+	ctx := context.Background()
+	tx, err := svc.store.Begin(ctx)
 	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Error occurred when starting database transaction: %s", txKey)
+		log.Logger().Error().Err(err).Msg("Error occurred when starting transaction")
 		return err
 	}
 
 	defer func() {
-		var err1 error
 		if err != nil {
-			err1 = svc.userDao.Rollback(txKey)
+			tx.Rollback()
 		} else {
-			err1 = svc.userDao.Commit(txKey)
-		}
-		if err1 != nil {
-			log.Logger().Error().Err(err).Msgf("Error occured when committing or rollingback transaction: %s", txKey)
+			tx.Commit()
 		}
 	}()
 
-	err = svc.userDao.RemoveUserRoleAssignment(userId, txKey)
+	ctx = store.WithTxContext(ctx, tx)
+
+	err = svc.store.Users().UnAssignRole(ctx, userId)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Removing existing role from user(%s) failed.", userId)
 		return err
 	}
 
-	err = svc.userDao.AssignUserRole(roleName, userId, txKey)
+	err = svc.store.Users().AssignRole(ctx, userId, roleName)
 	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to assign role to user")
 		return err
 	}
-	return nil
-}
 
-// TODO: consider roleName when removing
-func (svc *userService) unassignRoleFromUser(userId, roleName string) (err error) {
-	err = svc.userDao.RemoveUserRoleAssignment(userId, "")
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -361,23 +321,22 @@ type lockResult struct {
 }
 
 func (svc *userService) lockUserAccount(userId string) (*lockResult, error) {
-	txKey := fmt.Sprintf("lock-user-account-%s", userId)
-
-	err := svc.userDao.Begin(txKey)
+	ctx := context.Background()
+	tx, err := svc.store.Begin(ctx)
 	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Error occurred when starting transaction: %s", txKey)
+		log.Logger().Error().Err(err).Msg("Error occurred when starting transaction")
 		return nil, err
 	}
 
 	defer func() {
 		if err != nil {
-			svc.userDao.Rollback(txKey)
+			tx.Rollback()
 		} else {
-			svc.userDao.Commit(txKey)
+			tx.Commit()
 		}
 	}()
 
-	user, err := svc.userDao.GetUserAccountById(userId, txKey)
+	user, err := svc.store.Users().Get(ctx, userId)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occurred when retriving user account(%s)", userId)
 		return nil, err
@@ -389,14 +348,10 @@ func (svc *userService) lockUserAccount(userId string) (*lockResult, error) {
 		return res, nil
 	}
 
-	locked, err := svc.userDao.LockUserAccount(user.Username, ReasonLockedAdminLocked, txKey)
+	err = svc.store.Users().LockAccount(ctx, user.Username, constants.ReasonLockedAdminLocked)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occurred when locking user account: %s", userId)
 		return res, err
-	}
-	if !locked {
-		log.Logger().Error().Err(err).Msgf("Locking user account failed : %s", userId)
-		return nil, fmt.Errorf("locking user account failed")
 	}
 
 	res.success = true
@@ -410,24 +365,22 @@ type unlockResult struct {
 }
 
 func (svc *userService) unlockUserAccount(userId string) (*unlockResult, error) {
-
-	txKey := fmt.Sprintf("unlock-user-account-%s", userId)
-
-	err := svc.userDao.Begin(txKey)
+	ctx := context.Background()
+	tx, err := svc.store.Begin(ctx)
 	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Error occurred when starting transaction: %s", txKey)
+		log.Logger().Error().Err(err).Msg("Error occurred when starting transaction")
 		return nil, err
 	}
 
 	defer func() {
 		if err != nil {
-			svc.userDao.Rollback(txKey)
+			tx.Rollback()
 		} else {
-			svc.userDao.Commit(txKey)
+			tx.Commit()
 		}
 	}()
 
-	user, err := svc.userDao.GetUserAccountById(userId, txKey)
+	user, err := svc.store.Users().Get(ctx, userId)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occurred when retriving user account(%s)", userId)
 		return nil, err
@@ -435,21 +388,15 @@ func (svc *userService) unlockUserAccount(userId string) (*unlockResult, error) 
 
 	res := &unlockResult{}
 
-	if user.Locked && user.LockedReason == ReasonLockedNewAccountVerficationRequired {
+	if user.Locked && user.LockedReason == constants.ReasonLockedNewAccountVerficationRequired {
 		res.newAccount = true
 		return res, nil
 	}
 
-	unlocked, err := svc.userDao.UnlockUserAccount(userId, txKey)
+	err = svc.store.Users().UnlockAccount(ctx, userId)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occurred when unlocking user account: %s", userId)
 		return nil, err
-	}
-
-	if !unlocked {
-		log.Logger().Error().Err(err).Msgf("Unlocking user account failed: %s", userId)
-		res.success = false
-		return res, nil
 	}
 
 	res.success = true
@@ -469,44 +416,43 @@ type accountSetupVerficationResult struct {
 }
 
 func (svc *userService) getAccountSetupInfo(id string) (*accountSetupVerficationResult, error) {
-
-	txKey := fmt.Sprintf("get-account-setup-info-%s", id)
-
-	var res accountSetupVerficationResult
-
-	err := svc.userDao.Begin(txKey)
+	ctx := context.Background()
+	tx, err := svc.store.Begin(ctx)
 	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Error occured when creating transaction to database: %s", txKey)
+		log.Logger().Error().Err(err).Msg("Error occurred when starting transaction")
 		return nil, err
 	}
 
 	defer func() {
 		if err != nil {
-			svc.userDao.Rollback(txKey)
+			tx.Rollback()
 		} else {
-			svc.userDao.Commit(txKey)
+			tx.Commit()
 		}
 	}()
 
-	pwRecovery, err := svc.userDao.RetrivePasswordRecovery(id, txKey)
+	var res accountSetupVerficationResult
+
+	pwRecovery, err := svc.store.AccountRecovery().Get(ctx, id)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error ocurred when retriving password recovery by uuid: %s", id)
 		return nil, err
 	}
+
 	if pwRecovery == nil {
 		res.found = false
 		res.errorMsg = "This account setup link is no longer valid. It may have already been used.."
 		return &res, nil
 	}
 
-	if pwRecovery.ReasonType != ReasonPasswordRecoveryNewAccountSetup {
+	if pwRecovery.ReasonType != constants.ReasonPasswordRecoveryNewAccountSetup {
 		res.found = true
 		res.errorMsg = "This link is not valid. Please check it again ..."
 		return &res, nil
 	}
 	res.found = true
 
-	user, err := svc.userDao.GetUserAccountById(pwRecovery.UserId, txKey)
+	user, err := svc.store.Users().Get(ctx, pwRecovery.UserID)
 	// user account must exist. We don't check for not-found case. Reason: PaswordRecovery Table has FK reference to UserID
 	// and Delete cascade
 	if err != nil {
@@ -520,12 +466,12 @@ func (svc *userService) getAccountSetupInfo(id string) (*accountSetupVerfication
 		return &res, nil
 	}
 
-	res.userId = pwRecovery.UserId
+	res.userId = pwRecovery.UserID
 	res.username = user.Username
 	res.displayName = user.DisplayName
 	res.email = user.Email
 
-	role, err := svc.userDao.GetUserRole(pwRecovery.UserId, txKey)
+	role, err := svc.store.Users().GetRole(ctx, pwRecovery.UserID)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occurred when retriving user role for account setup verification")
 		return nil, err
@@ -535,24 +481,24 @@ func (svc *userService) getAccountSetupInfo(id string) (*accountSetupVerfication
 }
 
 func (svc *userService) completeAccountSetup(req *mgmt.AccountSetupCompleteRequest) error {
-	txKey := fmt.Sprintf("complete-account-setup-%s", req.Uuid)
-
-	err := svc.userDao.Begin(txKey)
+	ctx := context.Background()
+	tx, err := svc.store.Begin(ctx)
 	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Error occurred when starting transaction: %s", txKey)
+		log.Logger().Error().Err(err).Msg("Error occurred when starting transaction")
 		return err
 	}
 
 	defer func() {
 		if err != nil {
-			svc.userDao.Rollback(txKey)
+			tx.Rollback()
 		} else {
-			svc.userDao.Commit(txKey)
+			tx.Commit()
 		}
 	}()
 
 	// TODO:  Related issue: https://github.com/ksankeerth/open-image-registry/issues/16
-	_, err = svc.userDao.UpdateUserDisplayName(req.UserId, req.DisplayName, txKey)
+
+	err = svc.store.Users().UpdateDisplayName(ctx, req.UserId, req.DisplayName)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occurred when  completing account setup")
 		return err
@@ -565,39 +511,24 @@ func (svc *userService) completeAccountSetup(req *mgmt.AccountSetupCompleteReque
 	}
 	passwordHash := security.GeneratePasswordHash(req.Password, salt)
 
-	updated, err := svc.userDao.UpdateUserPasswordAndSalt(req.UserId, passwordHash, salt, txKey)
+	err = svc.store.Users().UpdatePasswordAndSalt(ctx, req.UserId, passwordHash, salt)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occurred when setting new password for user: %s", req.UserId)
 		return err
 	}
-	if !updated {
-		log.Logger().Warn().Msg("No entry was updated with new passowd")
-		return fmt.Errorf("account setup failed")
-	}
 
-	unlocked, err := svc.userDao.UnlockUserAccount(req.Username, txKey)
+	err = svc.store.Users().UnlockAccount(ctx, req.Username)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occurred when unlocking user account during account setup: %s", req.UserId)
 		return err
 	}
 
-	if !unlocked {
-		log.Logger().Warn().Msg("No user account was unlocked")
-		err = fmt.Errorf("account setup failed")
-		return err
-	}
-
-	deleted, err := svc.userDao.DeletePasswordRecovery(req.UserId, txKey)
+	err = svc.store.AccountRecovery().DeleteByUserID(ctx, req.UserId)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occured when removing password recovery reference: %s", req.Uuid)
 		return err
 	}
 
-	if !deleted {
-		log.Logger().Warn().Msgf("No password recovery reference was deleted for user: %s", req.UserId)
-		err = fmt.Errorf("account setup failed")
-		return err
-	}
 	// TODO: We may send a mail here. Idea: Send instructions to use OpenImageRegistry
 	return nil
 }
