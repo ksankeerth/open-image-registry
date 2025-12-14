@@ -6,6 +6,7 @@ import React, { useRef, useState } from "react";
 export type ChipFilterOption = {
   label: string;
   value: string;
+  unselected_default?: boolean
 };
 
 export type ChipFilterProps = {
@@ -18,7 +19,7 @@ const ChipsFilter = (props: ChipFilterProps) => {
   const opRef = useRef<OverlayPanel>(null);
   const [showOptions, setShowOptions] = useState<boolean>(false);
   const [selectedOptions, setSelectedOptions] = useState<Set<string>>(
-    new Set(props.filterOptions.map((op) => op.value))
+    new Set(props.filterOptions.filter(v => !v.unselected_default).map((op) => op.value))
   );
 
   const handleFilterChange = (e: CheckboxChangeEvent) => {
