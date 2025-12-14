@@ -3,11 +3,9 @@ package mgmt
 import "time"
 
 type UserProfileInfo struct {
-	UserId       string              `json:"user_id"`
-	Username     string              `json:"username"`
-	Role         string              `json:"role"`
-	Namespaces   []*NamespaceAccess  `json:"namespaces"`
-	Repositories []*RepositoryAccess `json:"repositories"`
+	UserId   string `json:"user_id"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
 }
 
 type AuthLoginResponse struct {

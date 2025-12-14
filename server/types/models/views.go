@@ -39,3 +39,32 @@ type UpstreamAddressView struct {
 	Port        int
 	UpstreamUrl string
 }
+
+type NamespaceView struct {
+	RegistryID  string
+	ID          string
+	Name        string
+	Description string
+	State       string
+	IsPublic    bool
+	Purpose     string
+	CreatedAt   time.Time
+	UpdatedAt   *time.Time
+	Developers  []string
+	Maintainers []string
+}
+
+type RepositoryView struct {
+	RegistryID  string
+	NamespaceID string
+	ID          string
+	Namespace   string
+	Name        string
+	Description string
+	State       string
+	IsPublic    bool
+	CreatedBy   string
+	TagsCount   int
+	CreatedAt   time.Time
+	UpdatedAt   *time.Time
+}

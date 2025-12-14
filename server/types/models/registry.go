@@ -15,7 +15,7 @@ type NamespaceModel struct {
 }
 
 type RepositoryModel struct {
-	ID         string
+	ID          string
 	RegistryID  string
 	NamespaceID string
 	Name        string
@@ -39,8 +39,8 @@ type ImageBlobMetaModel struct {
 
 type ImageBlobUploadSessionModel struct {
 	SessionID     string
-	Namespace     string
-	Repository    string
+	NamespaceID    string
+	RepositoryID    string
 	BytesReceived int
 	CreatedAt     time.Time
 	UpdatedAt     *time.Time
@@ -80,13 +80,4 @@ type RegistryCacheModel struct {
 	ExpiresAt    time.Time
 	CreatedAt    time.Time
 	UpdatedAt    *time.Time
-}
-
-type ResourceAccessModel struct {
-	Id           string
-	ResourceType string
-	UserId       string
-	AccessLevel  string
-	GrantedBy    string
-	GrantedAt    time.Time
 }
