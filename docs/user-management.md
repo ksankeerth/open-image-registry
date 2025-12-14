@@ -1,5 +1,7 @@
 # User Management Guide - Open Image Registry
 
+> **Note:** This is a draft specification document that serves as a development reference and guide for implementation. It is NOT the final documentation. The specification may evolve based on what proves to be more intuitive and practical during development and testing.
+
 ## Overview
 
 Open Image Registry provides a secure user account lifecycle management system with multi-stage account setup, password recovery, and account locking mechanisms. This document explains how user accounts are created, managed, and secured.
@@ -11,7 +13,6 @@ Open Image Registry provides a secure user account lifecycle management system w
 ### Stage 1: Onboarding (Admin Creates Account)
 
 An administrator creates a new user account by providing:
-
 - **Username** - Unique identifier for the user (can be modified later by the user)
 - **Email** - Unique email address for account recovery and notifications
 - **Display Name** (Optional) - User's full name or preferred display name (can be set later)
@@ -26,6 +27,8 @@ An administrator creates a new user account by providing:
    - `LOCKED` status set to `true`
    - `LOCKED_REASON` set to "New Account - Verification Required"
    - `FAILED_ATTEMPTS` set to 0
+   - `DELETED` set to `false`
+   - `DELETED` timestamp set to NULL
 3. **Invite Sent** - Invitation email sent to the provided email address with a unique setup link
 4. **Recovery Entry Created** - A password recovery record is created with:
    - Unique `RECOVERY_UUID`
@@ -35,29 +38,11 @@ An administrator creates a new user account by providing:
 #### UI Validation Requirements
 
 Before submitting a new user creation form, the system should:
-
 - Check if the username is available (real-time or on blur)
 - Check if the email is available (real-time or on blur)
 - Show warning/error messages if either already exists
 - Prevent form submission if validation fails
 
-#### API Validation Endpoint
-
-```
-POST /api/v1/users/validate
-{
-  "username": "string (optional)",
-  "email": "string (optional)"
-}
-
-Response:
-{
-  "username_available": boolean,
-  "email_available": boolean
-}
-```
-
----
 
 ### Stage 2: Account Setup (User Completes Initial Setup)
 
@@ -95,7 +80,6 @@ Account unlock only occurs if the `LOCKED_REASON` was "New Account - Verificatio
 ### Stage 3: Active Account Usage
 
 Once account setup is complete, users can:
-
 - Log in with their username/email and password
 - Access resources based on their assigned role
 - Change their password anytime
@@ -124,58 +108,6 @@ A user can reset their password only if their account is **active and unlocked**
 5. Password recovery record is deleted
 6. User can log in with the new password
 
-#### API Endpoint for Password Reset Request
-
-```
-POST /api/v1/users/password-reset/request
-{
-  "email": "string",
-  "reason": "forgot" | "change"
-}
-
-Response:
-{
-  "success": true,
-  "message": "Password reset email sent"
-}
-```
-
-#### API Endpoint for Password Validation
-
-```
-POST /api/v1/users/password-reset/validate-password
-{
-  "password": "string",
-  "recovery_uuid": "string"
-}
-
-Response:
-{
-  "valid": boolean,
-  "errors": {
-    "strength": ["Password too weak", "Missing uppercase letter"]
-  }
-}
-```
-
-#### API Endpoint for Password Reset Completion
-
-```
-POST /api/v1/users/password-reset/complete
-{
-  "recovery_uuid": "string",
-  "password": "string"
-}
-
-Response:
-{
-  "success": true,
-  "message": "Password reset successful"
-}
-```
-
----
-
 ## Account Locking
 
 ### Automatic Locking: Failed Login Attempts
@@ -194,27 +126,10 @@ When a user fails to log in:
 ### Manual Locking: Admin Action
 
 Administrators can manually lock any account:
-
 - `LOCKED` status set to `true`
 - `LOCKED_REASON` set to "Manually Locked by Admin"
 - `LOCKED_AT` timestamp recorded
 - Optional admin note/reason stored (if needed)
-
-#### API Endpoint for Manual Lock
-
-```
-POST /api/v1/users/{user_id}/lock
-{
-  "reason": "string (optional admin note)"
-}
-
-Response: 
-- HTTP 200 - If successful
-- HTTP 409 - If already locked
-- HTTP 500 - If any database errors occurred
-```
-
----
 
 ## Account Unlocking
 
@@ -226,21 +141,11 @@ Users cannot self-unlock their accounts. Unlock requires:
 2. **No Verification** - Unlike password reset, no email verification is needed
 3. **Account Immediately Active** - User can log in immediately after unlock
 
-#### API Endpoint for Unlock
-
-```
-POST /api/v1/users/{user_id}/unlock
-
-Response:
- - HTTP 200 - Success
- - HTTP 409 - New account
- - HTTP 500 - If database errors occurred
-```
-
 #### Unlock Restrictions
 
 - Cannot unlock through the password reset process
 - Only admins can unlock accounts
+- Cannot unlock accounts with `LOCKED_REASON` = "New Account - Verification Required" (must complete setup first)
 - Recommended: Send a notification email to the user after unlock
 
 ---
@@ -251,13 +156,41 @@ Response:
 
 Only administrators can delete user accounts.
 
-**What Happens Behind the Scenes**
+### Soft Delete Implementation
 
-Instead of removing the user account record from the database, we keep the record with a flag `DELETED` marked as `true`. We also change the `USERNAME` and `EMAIL` with a `[DELETED]` prefix, and the `PASSWORD` and `SALT` will be set to `[DELETED]`.
+Instead of removing the user account record from the database permanently (hard delete), the system implements **soft delete** to:
+- Maintain data integrity and audit trails
+- Preserve references in related tables
+- Allow for potential account recovery if needed
+- Meet compliance and data retention requirements
 
-Additionally, records with `DELETED` set to `true` cannot be fetched using API calls.
+#### What Happens During Deletion
 
----
+When an administrator deletes a user account:
+
+1. **Soft Delete Flag** - `DELETED` column set to `true`
+2. **Deletion Timestamp** - `DELETED` column set to current timestamp
+3. **Data Obfuscation** - To prevent conflicts with future user registrations:
+   - `USERNAME` prefixed with `[DELETED-{timestamp}]` (e.g., `[DELETED-20250114]john.doe`)
+   - `EMAIL` prefixed with `[DELETED-{timestamp}]` (e.g., `[DELETED-20250114]john@example.com`)
+   - `PASSWORD` set to `[DELETED]`
+   - `SALT` set to `[DELETED]`
+4. **Password Recovery Cleanup** - Any existing password recovery entries for this user are removed from `USER_PASSWORD_RECOVERY` table
+5. **Access Revocation** - All active sessions invalidated
+6. **Related Data** - Access grants and permissions may be preserved or removed based on business requirements
+
+#### Query Behavior
+
+- **API Calls** - Records with `DELETED = true` are automatically excluded from all API responses
+- **Database Queries** - All queries must include `WHERE DELETED = false` clause to filter out deleted accounts
+- **Admin Panel** - Deleted accounts may be visible in a separate "Deleted Accounts" section for audit purposes
+
+
+#### Important Considerations
+
+1. **Cannot Delete Self** - Admins should not be able to delete their own account through the UI
+2. **Last Admin Protection** - System should prevent deletion of the last admin account
+
 
 ## Password Recovery Reasons Reference
 
@@ -291,10 +224,12 @@ The system records why an account is locked for transparency and audit purposes:
 
 The system supports four role levels with increasing permissions:
 
-- **Guest** - Read-only access to public resources
-- **Developer** - Can push/pull images, manage personal namespaces
-- **Maintainer** - Can manage repositories and users in their organization
+- **Guest** - Read-only access to authorized resources
+- **Developer** - Can push/pull images to authorized namespaces
+- **Maintainer** - Can manage repositories and grant access within their namespaces
 - **Admin** - Full system access, can manage all users and settings
+
+**Note:** For detailed information about roles and access levels, refer to the [Access Management Guide](./access-management-guide.md).
 
 ---
 
@@ -302,24 +237,44 @@ The system supports four role levels with increasing permissions:
 
 ### USER_ACCOUNT Table
 
-- `USERNAME` and `EMAIL` are UNIQUE to prevent duplicates
-- `DISPLAY_NAME` cannot be NULL; set to "NOT SET" if not provided
-- `LOCKED` is INTEGER (0 = unlocked, 1 = locked)
-- `LOCKED_REASON` stores code (1, 2, or 3) matching recovery reason types
-- `LOCKED_AT` tracks when the lock occurred for audit purposes
-- `FAILED_ATTEMPTS` automatically resets to 0 on successful login
+Core columns:
+- `USERNAME` - UNIQUE, user's login identifier
+- `EMAIL` - UNIQUE, used for authentication and recovery
+- `DISPLAY_NAME` - NOT NULL; set to "NOT SET" if not provided
+- `PASSWORD` - Hashed password (never store plain text)
+- `SALT` - Unique salt for password hashing
+- `LOCKED` - INTEGER (0 = unlocked, 1 = locked)
+- `LOCKED_REASON` - Stores code (1, 2, or 3) matching locking reason types
+- `LOCKED_AT` - Timestamp when the lock occurred (for audit purposes)
+- `FAILED_ATTEMPTS` - Counter that automatically resets to 0 on successful login
+- `DELETED` - BOOLEAN (false = active, true = deleted)
+- `DELETED` - TIMESTAMP, when the account was soft deleted (NULL if active)
+
+**Soft Delete Implementation:**
+- `DELETED` column allows filtering out deleted accounts without removing database records
+- `DELETED` timestamp tracks when deletion occurred for audit and cleanup purposes
+- When `DELETED = true`:
+  - `USERNAME` and `EMAIL` are obfuscated with `[DELETED-{timestamp}]` prefix
+  - `PASSWORD` and `SALT` are set to `[DELETED]`
+  - Record cannot be fetched through normal API calls
+  - Must be explicitly excluded in all queries: `WHERE DELETED = false`
 
 ### USER_PASSWORD_RECOVERY Table
 
-- `RECOVERY_UUID` is the primary key (unique recovery link per user)
-- `USER_ID` has a UNIQUE constraint to enforce one active recovery per user
-- `REASON_TYPE` uses a CHECK constraint to enforce valid codes (1, 2, 3)
-- Record is automatically deleted when recovery is completed or user is deleted
+- `RECOVERY_UUID` - PRIMARY KEY, unique recovery link per user
+- `USER_ID` - UNIQUE constraint to enforce one active recovery per user
+- `REASON_TYPE` - CHECK constraint to enforce valid codes (1, 2, 3)
+- Record is automatically deleted when:
+  - Recovery is completed successfully
+  - User is soft deleted (cleanup to prevent orphaned records)
+
+**Important:** When a user is deleted, any existing password recovery entries must be removed to maintain data integrity.
 
 ### USER_ROLE_ASSIGNMENT Table
 
-- `PRIMARY KEY (USER_ID)` enforces a single role per user (no multi-role support)
-- `ON DELETE CASCADE` ensures cleanup when a user is deleted
+- `PRIMARY KEY (USER_ID)` - Enforces a single role per user (no multi-role support)
+- `ON DELETE CASCADE` - Ensures cleanup when a user is deleted
+- May be preserved during soft delete for audit purposes (implementation-dependent)
 
 ---
 
@@ -331,23 +286,21 @@ The system supports four role levels with increasing permissions:
 4. **Audit Logging** - Log all account creation, locking, unlocking, and deletion actions
 5. **Email Verification** - Verify email ownership during account creation and changes
 6. **Failed Attempt Tracking** - Track and log all failed login attempts with timestamps and IP addresses
-7. **Admin Notifications** - Alert admins when accounts are locked due to failed attempts
+7. **Soft Delete Security** - Ensure soft-deleted accounts cannot authenticate or access any resources
+8. **Admin Protection** - Prevent deletion of the last admin account to avoid system lockout
+9. **Session Invalidation** - Immediately invalidate all active sessions when an account is locked or deleted
 
 ---
 
-## Implementation Checklist
 
-- [ ] Implement username/email uniqueness validation
-- [ ] Implement password strength validation (UI + API)
-- [ ] Create password recovery UUID generation (use cryptographically secure random)
-- [ ] Implement email sending for invites and password resets
-- [ ] Set up recovery link expiry (24-48 hours)
-- [ ] Implement failed login attempt tracking
-- [ ] Create admin unlock functionality
-- [ ] Implement audit logging for all account actions
-- [ ] Add rate limiting on login endpoint
-- [ ] Create cleanup job to delete expired recovery records
-- [ ] Add email verification step during account creation
-- [ ] Document password hashing algorithm used
+### Query Filters
 
----
+**Important:** All API endpoints and database queries must filter out soft-deleted accounts:
+
+```sql
+-- Correct query pattern
+SELECT * FROM USER_ACCOUNT WHERE DELETED = false AND ...
+
+-- Include deleted accounts only in admin audit views
+SELECT * FROM USER_ACCOUNT WHERE DELETED = true AND ...
+```
