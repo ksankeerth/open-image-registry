@@ -24,15 +24,26 @@ const RegistryConsolePage = () => {
   useEffect(() => {
     if (location.pathname.startsWith("/console")) {
       setVisible(true)
+
+      // this is to redirect to default menu users
+      if (location.pathname == "/console") {
+        navigate("/console/user-management/users", {
+          replace: true,
+          viewTransition: true
+        });
+      }
     } else {
-      setVisible(false);
+        setVisible(false);
     }
   }, [location.pathname]);
 
-  // this is to redirect to default menu users
+  
   useEffect(() => {
     if (location.pathname == "/console") {
-      navigate("/console/user-management/users")
+      navigate("/console/user-management/users", {
+        replace: true,
+        viewTransition: true
+      });
     }
   }, [location.pathname])
 
@@ -68,7 +79,9 @@ const RegistryConsolePage = () => {
   }, [location.pathname]);
 
   const handleClickHome = () => {
-    navigate("/");
+    navigate("/", {
+      viewTransition: true
+    });
     setTimeout(() => {
       setVisible(false);
     }, 150)

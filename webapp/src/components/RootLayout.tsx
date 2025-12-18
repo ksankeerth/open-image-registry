@@ -35,7 +35,9 @@ const RootLayout = () => {
   };
 
   const navigateToManagementConsole = () => {
-    navigate("/console")
+    navigate("/console", {
+      viewTransition: true
+    })
   }
 
 
