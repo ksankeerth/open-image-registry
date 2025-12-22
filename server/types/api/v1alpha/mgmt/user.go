@@ -40,9 +40,11 @@ type CreateUserAccountResponse struct {
 }
 
 type UpdateUserAccountRequest struct {
-	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
-	Role        string `json:"role"`
+}
+
+type ChangeUserRoleRequest struct {
+	Role string `json:"role"`
 }
 
 type PasswordRecoveryDTO struct {
@@ -67,11 +69,6 @@ type ChangePasswordResponse struct {
 type UpdateUserEmailRequest struct {
 	UserId string `json:"user_id"`
 	Email  string `json:"email"`
-}
-
-type UpdateUserDisplayNameRequest struct {
-	UserId      string `json:"user_id"`
-	DisplayName string `json:"display_name"`
 }
 
 type AssignRoleRequest struct {
@@ -123,4 +120,18 @@ type AccountSetupCompleteRequest struct {
 	DisplayName string `json:"display_name"`
 	Password    string `json:"password"`
 	Uuid        string `json:"uuid"`
+}
+
+type GetUserResponse struct {
+	Id             string     `json:"id"`
+	Username       string     `json:"username"`
+	Email          string     `json:"email"`
+	DisplayName    string     `json:"display_name"`
+	Locked         bool       `json:"locked"`
+	LockedReason   int        `json:"locked_reason"`
+	FailedAttempts int        `json:"failed_attempts"`
+	Role           string     `json:"role"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      *time.Time `json:"updated_at"`
+	LockedAt       *time.Time `json:"locked_at"`
 }

@@ -311,7 +311,7 @@ func (svc *repositoryService) changeVisiblity(reqCtx context.Context, id string,
 
 	err = svc.store.Repositories().SetVisibility(ctx, id, public)
 	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Failed to change visibility of repository(%s) to public=%b", id, public)
+		log.Logger().Error().Err(err).Msgf("Failed to change visibility of repository(%s) to public=%t", id, public)
 		return nil, err
 	}
 

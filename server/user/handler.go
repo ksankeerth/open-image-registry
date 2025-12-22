@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/ksankeerth/open-image-registry/access/resource"
 	"github.com/ksankeerth/open-image-registry/client/email"
 	"github.com/ksankeerth/open-image-registry/errors/httperrors"
 	"github.com/ksankeerth/open-image-registry/lib"
@@ -23,9 +24,10 @@ type UserAPIHandler struct {
 func NewUserAPIHandler(store store.Store, emailClient *email.EmailClient) *UserAPIHandler {
 	return &UserAPIHandler{
 		svc: &userService{
-			store:   store,
-			adapter: &UserAdapter{},
-			ec:      emailClient,
+			store:         store,
+			adapter:       &UserAdapter{},
+			ec:            emailClient,
+			accessManager: resource.NewManager(store),
 		},
 	}
 }
@@ -132,7 +134,7 @@ func (h *UserAPIHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	userId := chi.URLParam(r, "id")
 
-	err = h.svc.updateUserAccount(userId, req.Email, req.DisplayName, req.Role)
+	err = h.svc.updateUserAccount(r.Context(), userId, req.DisplayName)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("Request aborted due to database errors")
 		httperrors.InternalError(w, 500, "Request aborted due to database errors")
@@ -173,7 +175,6 @@ func (h *UserAPIHandler) ValidateUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("Error occurred when writing response to validate username and email request")
 	}
-
 }
 
 func (h *UserAPIHandler) ValidatePassword(w http.ResponseWriter, r *http.Request) {
@@ -200,32 +201,6 @@ func (h *UserAPIHandler) ValidatePassword(w http.ResponseWriter, r *http.Request
 		log.Logger().Error().Err(err).Msgf("Error occurred when writing json response : %s", r.RequestURI)
 	}
 }
-
-// GetUser handles GET /api/v1/users/{id}
-// func (h *UserAPIHandler) GetUser(w http.ResponseWriter, r *http.Request) {
-// 	userId := chi.URLParam(r, "id")
-
-// 	userAccount, err := h.svc.getUserAccount(userId)
-// 	if userAccount == nil && err == nil {
-// 		httperrors.NotFound(w, 404, "No user account found")
-// 		return
-// 	}
-
-// 	if err != nil {
-// 		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
-// 		httperrors.InternalError(w, 500, "Request aborted due to database errors")
-// 		return
-// 	}
-
-// 	userDto := h.adapter.ToUserDTO(userAccount)
-
-// 	w.Header().Set("Content-Type", "application/json")
-// 	w.WriteHeader(http.StatusOK)
-// 	err = json.NewEncoder(w).Encode(userDto)
-// 	if err != nil {
-// 		log.Logger().Error().Err(err).Msg("Error occurred when writing response to get user account request")
-// 	}
-// }
 
 // UpdateUserEmail handles PUT /api/v1/users/{id}/email
 func (h *UserAPIHandler) UpdateUserEmail(w http.ResponseWriter, r *http.Request) {
@@ -260,11 +235,11 @@ func (h *UserAPIHandler) UpdateUserEmail(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 }
 
-// UpdateUserDisplayName handles PUT /api/v1/users/{id}/display-name
-func (h *UserAPIHandler) UpdateUserDisplayName(w http.ResponseWriter, r *http.Request) {
+// UpdateUserDisplayName handles PUT /api/v1/users/{id}/role
+func (h *UserAPIHandler) ChangeRole(w http.ResponseWriter, r *http.Request) {
 	userId := chi.URLParam(r, "id")
 
-	var reqBody mgmt.UpdateUserDisplayNameRequest
+	var reqBody mgmt.ChangeUserRoleRequest
 	err := json.NewDecoder(r.Body).Decode(&reqBody)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Parsing request body caused errors")
@@ -272,24 +247,24 @@ func (h *UserAPIHandler) UpdateUserDisplayName(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if userId != reqBody.UserId {
-		log.Logger().Error().Msgf("Update user display name request with two different user ids were detected; Path: %s, Body: %s", userId, reqBody.UserId)
-		httperrors.BadRequest(w, 400, "Invalid body and path parameters")
+	if !isValidRole(reqBody.Role) {
+		log.Logger().Error().Err(err).Msgf("Changing role request failed due to invalid role: %s", reqBody.Role)
+		httperrors.BadRequest(w, 400, "Invalid role")
 		return
 	}
 
-	valid, errMsg := ValidateUpdateDisplayName(&reqBody)
-	if !valid {
-		httperrors.BadRequest(w, 400, errMsg)
-		return
-	}
-
-	err = h.svc.updateUserDisplayName(userId, reqBody.DisplayName)
+	errMsg, err := h.svc.changeRole(r.Context(), reqBody.Role, userId)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
 		httperrors.InternalError(w, 500, "Request aborted due to errors")
 		return
 	}
+
+	if errMsg != "" {
+		httperrors.NotAllowed(w, 403, errMsg)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -518,26 +493,55 @@ func (h *UserAPIHandler) CompleteUserAccountSetup(w http.ResponseWriter, r *http
 	w.WriteHeader(http.StatusOK)
 }
 
+func (h *UserAPIHandler) GetUser(w http.ResponseWriter, r *http.Request) {
+	identifier := chi.URLParam(r, "identifier")
+	// identifier can be username or id
+
+	user, role, err := h.svc.getUser(r.Context(), identifier)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
+		httperrors.InternalError(w, 500, "Request aborted due to errors")
+		return
+	}
+
+	if user == nil {
+		httperrors.NotFound(w, 404, "")
+		return
+	}
+
+	response := h.adapter.makeGetUserResponse(user, role)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	err = json.NewEncoder(w).Encode(response)
+	if err != nil {
+		log.Logger().Err(err).Msgf("Error occurred when writing response to request: %s", r.RequestURI)
+	}
+
+}
+
 func (h *UserAPIHandler) Routes() chi.Router {
 	router := chi.NewRouter()
 	router.Route("/", func(r chi.Router) {
+		r.Get("/me", h.GetCurrentUser)
+		r.Put("/me", h.UpdateCurrentUser)
+		r.Post("/validate", h.ValidateUser)
+		r.Post("/validate-password", h.ValidatePassword)
+		
+
 		r.Put("/{id}/email", h.UpdateUserEmail)
-		r.Put("/{id}/display-name", h.UpdateUserDisplayName)
+		r.Put("/{id}/role", h.ChangeRole)
 		r.Put("/{id}/password", h.ChangePassword)
 		r.Put("/{id}", h.UpdateUser)
 		r.Put("/{id}/lock", h.LockUser)
 		r.Put("/{id}/unlock", h.UnlockUser)
-		// r.Get("/{id}/namespaces", h.GetUserNamespaces)
-		// r.Get("/{id}/repositories", h.GetUserRepositories)
-		r.Get("/me", h.GetCurrentUser)
-		r.Put("/me", h.UpdateCurrentUser)
-		// r.Get("/{id}/role", h.GetUserRole)
-		// r.Get("/{id}", h.GetUser) TODO: We'll think about this response type later
+
 		r.Delete("/{id}", h.DeleteUser)
+		r.Get("/{identifier}", h.GetUser) // identifier can be either username or id
 		r.Post("/", h.CreateUser)
 		r.Get("/", h.ListUsers)
-		r.Post("/validate", h.ValidateUser)
-		r.Post("/validate-password", h.ValidatePassword)
+
 		r.Get("/account-setup/{uuid}", h.GetUserAccountSetupInfo)
 		r.Post("/account-setup/{uuid}/complete", h.CompleteUserAccountSetup)
 	})

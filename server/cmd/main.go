@@ -12,20 +12,17 @@ import (
 	"syscall"
 	"time"
 
-	server "github.com/ksankeerth/open-image-registry"
-	"github.com/ksankeerth/open-image-registry/access"
-	"github.com/ksankeerth/open-image-registry/auth"
 	"github.com/ksankeerth/open-image-registry/client/email"
 	"github.com/ksankeerth/open-image-registry/config"
 	"github.com/ksankeerth/open-image-registry/constants"
 	"github.com/ksankeerth/open-image-registry/listeners"
 	"github.com/ksankeerth/open-image-registry/log"
 	"github.com/ksankeerth/open-image-registry/registry"
+	"github.com/ksankeerth/open-image-registry/rest"
 	"github.com/ksankeerth/open-image-registry/security"
 	"github.com/ksankeerth/open-image-registry/storage"
 	"github.com/ksankeerth/open-image-registry/store"
 	"github.com/ksankeerth/open-image-registry/store/sqlite"
-	"github.com/ksankeerth/open-image-registry/user"
 )
 
 func main() {
@@ -116,11 +113,7 @@ func main() {
 	}
 
 	// ------------ start serving ManagementAPIs and UI -----------------------
-	appRouter := server.AppRouter(&appConfig.WebApp,
-		auth.NewAuthAPIHandler(store),
-		user.NewUserAPIHandler(store, emailClient),
-		access.NewRegistryAccessHandler(store),
-	)
+	appRouter := rest.AppRouter(&appConfig.WebApp, store, emailClient)
 
 	address := fmt.Sprintf("%s:%d", appConfig.Server.Hostname, appConfig.Server.Port)
 

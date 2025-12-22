@@ -457,7 +457,7 @@ func (svc *namespaceService) listRepositories(reqCtx context.Context, identifier
 
 	ns, err := svc.store.Namespaces().GetByIdentifier(ctx, constants.HostedRegistryID, identifier)
 	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Listing repositories of namespace(%s) failed")
+		log.Logger().Error().Err(err).Msgf("Listing repositories of namespace(%s) failed", identifier)
 		return nil, -1, err
 	}
 

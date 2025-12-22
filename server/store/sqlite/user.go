@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/ksankeerth/open-image-registry/errors/dberrors"
@@ -53,10 +54,10 @@ func (u *userStore) Delete(ctx context.Context, userId string) error {
 	return nil
 }
 
-func (u *userStore) Update(ctx context.Context, userId, email, displayName string) error {
+func (u *userStore) Update(ctx context.Context, userId, displayName string) error {
 	q := u.getQuerier(ctx)
 
-	_, err := q.ExecContext(ctx, UserUpdateAccountQuery, email, displayName, userId)
+	_, err := q.ExecContext(ctx, UserUpdateAccountQuery, displayName, userId)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("failed to update user")
 		return dberrors.ClassifyError(err, UserUpdateAccountQuery)
@@ -129,6 +130,9 @@ func (u *userStore) CheckAvailability(ctx context.Context, username, email strin
 	}
 	defer rows.Close()
 
+	var usernames []string
+	var emails []string
+
 	for rows.Next() {
 		var un, em string
 		err = rows.Scan(&un, &em)
@@ -136,25 +140,26 @@ func (u *userStore) CheckAvailability(ctx context.Context, username, email strin
 			log.Logger().Error().Err(err).Msg("failed to check username and email availability")
 			return false, false, dberrors.ClassifyError(err, UserValidateUsernameAndEmailQuery)
 		}
-		if username == "" && un == username {
-			usernameAvail = true
+		if un != "" {
+			usernames = append(usernames, un)
 		}
-		if email != "" && em == email {
-			emailAvail = true
+
+		if em != "" {
+			emails = append(emails, em)
 		}
 	}
 
-	return
+	return username != "" && !slices.Contains(usernames, username), email != "" && !slices.Contains(emails, email), nil
 }
 
-func (u *userStore) Get(ctx context.Context, id string) (*models.UserAccount, error) {
+func (u *userStore) Get(ctx context.Context, identifier string) (*models.UserAccount, error) {
 	q := u.getQuerier(ctx)
 
 	var m models.UserAccount
 	var createdAt, updatedAt, lockedAt string
 	var locked int
 
-	row := q.QueryRowContext(ctx, UserGetUserAccountQuery, id)
+	row := q.QueryRowContext(ctx, UserGetUserAccountQuery, identifier, identifier)
 
 	err := row.Scan(
 		&m.Id, &m.Username, &m.Email, &m.DisplayName,
