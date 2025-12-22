@@ -9,6 +9,12 @@ build-ui:
 run-server: build-server
 	cd server/bin && ./open-image-registry-server
 
+tests: build-server
+	cd server && go test -v ./... -cover
+
+
+integration: build-server
+	cd server && go test -v ./tests/integration/...
 
 # Build images and then start all services defined in docker-compose.yml
 .PHONY: compose-up-build

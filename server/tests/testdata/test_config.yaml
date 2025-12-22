@@ -1,0 +1,48 @@
+server:
+  hostname: "localhost"
+  port: 8000
+
+image_registry:
+  enabled: true
+  hostname: "localhost"
+  port: 5000
+  create_namespace_on_push: true
+  create_repository_on_push: true
+
+upstream_registry:
+  enabled: true
+
+admin:
+  username: "admin"
+  password: "admin"
+  email: admin@test.com
+  create_account: true
+
+database:
+  type: "sqlite"
+  path: "${app_home}/server/tests/temp/registry_sqlite_test.db"
+  auto_create:  true # This will create sqlite db if path given doesn't exist
+  scripts_path: "${app_home}/server/db-scripts/sqlite/registry.sql"
+
+storage:
+  type: "lfs"
+  auto_create: true # This will create lfs storage path
+  path: "${app_home}/server/tests/temp/storage"
+
+notification:
+  # By default, email notification is disabled. To invite new user, email configuration must be enabled.
+  email:
+    enabled: false
+    smtp_host: ""
+    smtp_port: 0
+    smtp_user: ""
+    smtp_password: ""
+    from_address: ""
+
+webapp:
+  enable_ui: false
+  dist_path: ${app_home}/webapp/build
+
+development:
+  enable: true
+  mock_email: true # Instead of sending email, print the link/uuid in logs
