@@ -131,7 +131,7 @@ const (
 const (
 	UserCreateAccountQuery               = `INSERT INTO USER_ACCOUNT(USERNAME, EMAIL, DISPLAY_NAME, PASSWORD, SALT) VALUES(?, ?, ?, ?, ?) RETURNING ID`
 	UserDeleteAccountQuery               = `UPDATE USER_ACCOUNT SET DELETED = 1, USERNAME = '[DELETED]' || USERNAME, EMAIL = '[DELETED]' || EMAIL, PASSWORD = '[DELETED]', SALT = '[DELETED]' WHERE ID = ?`
-	UserUpdateAccountQuery               = `UPDATE USER_ACCOUNT SET EMAIL = ?, DISPLAY_NAME = ? WHERE ID = ?`
+	UserUpdateAccountQuery               = `UPDATE USER_ACCOUNT SET DISPLAY_NAME = ? WHERE ID = ?`
 	UserUpdateEmailAccountQuery          = `UPDATE USER_ACCOUNT SET EMAIL = ? WHERE ID = ?`
 	UserUpdateDisplayNameAccountQuery    = `UPDATE USER_ACCOUNT SET DISPLAY_NAME = ? WHERE ID = ?`
 	UserLockUserAccountByUsernameQuery   = `UPDATE USER_ACCOUNT SET LOCKED = 1, LOCKED_REASON  = ?, LOCKED_AT = CURRENT_TIMESTAMP   WHERE USERNAME = ?`
@@ -148,7 +148,7 @@ const (
 	`
 	UserGetUserAccountQuery = `SELECT ID, USERNAME, EMAIL, DISPLAY_NAME, LOCKED, LOCKED_REASON, FAILED_ATTEMPTS, CREATED_AT, UPDATED_AT, LOCKED_AT
 		FROM USER_ACCOUNT
-		WHERE DELETED = 0 AND ID = ?
+		WHERE DELETED = 0 AND (ID = ? OR USERNAME = ?)
 	`
 	// IMPORTANT: Base list query avoids WHERE keywords because if we have it in one of the subquery, it will confuse query
 	// builder. Current query builder checks WHERE keyword exists or not (not intelligent enough to understand sub queries)

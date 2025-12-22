@@ -177,3 +177,23 @@ func (ua *UserAdapter) toUserAccountSetupVerficationResponse(result *accountSetu
 	response.Username = result.username
 	return &response
 }
+
+func (ua *UserAdapter) makeGetUserResponse(m *models.UserAccount, role string) *mgmt.GetUserResponse {
+	if m == nil {
+		return nil
+	}
+
+	res := &mgmt.GetUserResponse{
+		Id:           m.Id,
+		Username:     m.Username,
+		Email:        m.Email,
+		DisplayName:  m.DisplayName,
+		Role:         role,
+		CreatedAt:    m.CreatedAt,
+		UpdatedAt:    m.UpdatedAt,
+		LockedAt:     m.LockedAt,
+		LockedReason: m.LockedReason,
+	}
+
+	return res
+}

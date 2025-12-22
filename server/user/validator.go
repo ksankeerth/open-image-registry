@@ -31,32 +31,6 @@ func ValidateCreateUserAccount(req *mgmt.CreateUserAccountRequest) (bool, string
 	return true, ""
 }
 
-func ValidateUpdateUserAccount(req *mgmt.UpdateUserAccountRequest) (bool, string) {
-	if req.Email == "" {
-		return false, "Invalid email"
-	}
-	if req.Role == "" {
-		return false, "Invalid Role"
-	}
-
-	if req.Email != "" && !utils.IsValidEmail(req.Email) {
-		return false, "Invalid email"
-	}
-
-	if req.DisplayName != "" && len(req.DisplayName) > 255 {
-		return false, "Display name is too long"
-	}
-
-	if req.Role != "" {
-		if !(req.Role == constants.RoleAdmin || req.Role == constants.RoleDeveloper || req.Role == constants.RoleGuest ||
-			req.Role == constants.RoleMaintainer) {
-			return false, "Invalid Role"
-		}
-	}
-
-	return true, ""
-}
-
 func ValidateUpdateUserEmail(req *mgmt.UpdateUserEmailRequest) (bool, string) {
 	if !utils.IsValidEmail(req.Email) {
 		return false, "Invalid email"
@@ -64,10 +38,11 @@ func ValidateUpdateUserEmail(req *mgmt.UpdateUserEmailRequest) (bool, string) {
 	return true, ""
 }
 
-func ValidateUpdateDisplayName(req *mgmt.UpdateUserDisplayNameRequest) (bool, string) {
-	if req.DisplayName != "" {
+func ValidateUpdateUserAccount(req *mgmt.UpdateUserAccountRequest) (bool, string) {
+	if req.DisplayName == "" || len(req.DisplayName) > 255 {
 		return false, "Invalid user display name"
 	}
+
 	return true, ""
 }
 
@@ -113,4 +88,13 @@ func ValidateAccountSetupCompleteRequest(req *mgmt.AccountSetupCompleteRequest) 
 		return true, ""
 	}
 	return false, msg
+}
+
+func isValidRole(role string) bool {
+	if !(role == constants.RoleAdmin || role == constants.RoleDeveloper ||
+		role == constants.RoleGuest || role == constants.RoleMaintainer) {
+		return false
+	}
+
+	return true
 }

@@ -79,6 +79,7 @@ func NewWithDB(db *sql.DB) *Store {
 	s.recovery = newAccountRecoveryStore(db)
 	s.repository = newRepositoryStore(db)
 	s.upstream = newUpstreamStore(db)
+	s.user = newUserStore(db)
 
 	s.queries = newQueries(db)
 

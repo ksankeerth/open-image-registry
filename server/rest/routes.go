@@ -1,4 +1,4 @@
-package server
+package rest
 
 import (
 	"log/slog"
@@ -12,16 +12,14 @@ import (
 	"github.com/go-chi/httplog/v2"
 	"github.com/ksankeerth/open-image-registry/access"
 	"github.com/ksankeerth/open-image-registry/auth"
+	"github.com/ksankeerth/open-image-registry/client/email"
 	"github.com/ksankeerth/open-image-registry/config"
 	"github.com/ksankeerth/open-image-registry/log"
+	"github.com/ksankeerth/open-image-registry/store"
 	"github.com/ksankeerth/open-image-registry/user"
 )
 
-func AppRouter(webappConfig *config.WebAppConfig,
-	authHandler *auth.AuthAPIHandler,
-	userHandler *user.UserAPIHandler,
-	registryAccessHandler *access.RegistryAccessHandler,
-) *chi.Mux {
+func AppRouter(webappConfig *config.WebAppConfig, store store.Store, ec *email.EmailClient) *chi.Mux {
 	router := chi.NewRouter()
 
 	// Middleware setup
@@ -40,15 +38,25 @@ func AppRouter(webappConfig *config.WebAppConfig,
 		MessageFieldName: "message",
 	})))
 
+	router.Use(EnforceJSON)
+
+	authHandler := auth.NewAuthAPIHandler(store)
+	userHandler := user.NewUserAPIHandler(store, ec)
+	registryAccessHandler := access.NewRegistryAccessHandler(store)
+
 	// API routes
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Mount("/users", userHandler.Routes())
 		r.Mount("/auth", authHandler.Routes())
 		r.Mount("/access", registryAccessHandler.Routes())
+		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+			//TODO: develop health check endpoint later
+			w.WriteHeader(http.StatusOK)
+		})
 		// Add other API routes here
 	})
 
-	if !webappConfig.EnableUI {
+	if webappConfig == nil && !webappConfig.EnableUI {
 		return router
 	}
 

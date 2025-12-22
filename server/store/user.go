@@ -11,7 +11,7 @@ type UserStore interface {
 
 	Delete(ctx context.Context, userId string) (err error)
 
-	Update(ctx context.Context, userId, email, displayName string) error
+	Update(ctx context.Context, userId, displayName string) error
 
 	UpdateEmail(ctx context.Context, userId, newEmail string) (err error)
 
@@ -25,7 +25,8 @@ type UserStore interface {
 
 	CheckAvailability(ctx context.Context, username, email string) (usernameAvail, emailAvail bool, err error)
 
-	Get(ctx context.Context, id string) (*models.UserAccount, error)
+	// identifier can be either id or username
+	Get(ctx context.Context, identifier string) (*models.UserAccount, error)
 
 	GetByUsername(ctx context.Context, username string) (*models.UserAccount, error)
 

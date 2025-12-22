@@ -2,9 +2,11 @@ package user
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/ksankeerth/open-image-registry/access/resource"
 	"github.com/ksankeerth/open-image-registry/client/email"
 	"github.com/ksankeerth/open-image-registry/config"
 	"github.com/ksankeerth/open-image-registry/constants"
@@ -18,6 +20,7 @@ import (
 )
 
 type userService struct {
+	accessManager *resource.Manager
 	store         store.Store
 	ec            *email.EmailClient
 	adapter       *UserAdapter
@@ -72,7 +75,8 @@ func (svc *userService) getUserList(cond *store.ListQueryConditions) (users []*m
 }
 
 // createUserAccount returns passwordRecoveryUUID only if development mode is enabled
-func (svc *userService) createUserAccount(username, email, displayName, role string) (userId string, conflict bool, passwordRecoveryId string, err error) {
+func (svc *userService) createUserAccount(username, email, displayName, role string) (userId string, conflict bool,
+	passwordRecoveryId string, err error) {
 
 	ctx := context.Background()
 	tx, err := svc.store.Begin(ctx)
@@ -108,7 +112,7 @@ func (svc *userService) createUserAccount(username, email, displayName, role str
 		return
 	}
 
-	err = svc.store.Users().AssignRole(ctx, role, userId)
+	err = svc.store.Users().AssignRole(ctx, userId, role)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occurred when assigning role to new user account: %s", username)
 		return
@@ -140,10 +144,9 @@ func (svc *userService) createUserAccount(username, email, displayName, role str
 	return
 }
 
-func (svc *userService) updateUserAccount(userId, email, displayName, role string) error {
+func (svc *userService) updateUserAccount(reqCtx context.Context, userId, displayName string) error {
 
-	ctx := context.Background()
-	tx, err := svc.store.Begin(ctx)
+	tx, err := svc.store.Begin(reqCtx)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("Error occurred when starting transaction")
 		return err
@@ -157,23 +160,11 @@ func (svc *userService) updateUserAccount(userId, email, displayName, role strin
 		}
 	}()
 
-	ctx = store.WithTxContext(ctx, tx)
+	ctx := store.WithTxContext(reqCtx, tx)
 
-	err = svc.store.Users().Update(ctx, userId, email, displayName)
+	err = svc.store.Users().UpdateDisplayName(ctx, userId, displayName)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Updating user account failed: %s", userId)
-		return err
-	}
-
-	err = svc.store.Users().UnAssignRole(ctx, userId)
-	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Removing role assignment from user: %s failed", userId)
-		return err
-	}
-
-	err = svc.store.Users().AssignRole(ctx, role, userId)
-	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Assigning role(%s) to user(%s) failed", role, userId)
 		return err
 	}
 
@@ -531,4 +522,146 @@ func (svc *userService) completeAccountSetup(req *mgmt.AccountSetupCompleteReque
 
 	// TODO: We may send a mail here. Idea: Send instructions to use OpenImageRegistry
 	return nil
+}
+
+// changeRole changes the role if possible. If not it will send an `errMsg` with details.
+// If any other errors occured, it will return `error`.
+func (svc *userService) changeRole(reqCtx context.Context, newRole, userId string) (errMsg string, err error) {
+	tx, err := svc.store.Begin(reqCtx)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Error occurred when starting transaction")
+		return "", err
+	}
+
+	ctx := store.WithTxContext(reqCtx, tx)
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	role, err := svc.store.Users().GetRole(ctx, userId)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Failed to change role due to database errors")
+		return "", err
+	}
+
+	if role == newRole {
+		// no change so let's pretend like we've have changed
+		return "", nil
+	}
+
+	// conditions
+	// 1. if a user have access to resources and any of the current access level exceeds max access
+	// level allowed by the new role, it wil be not allowed to change roles.
+	// first admin must revoke/change access levels before chaning roles
+	// 2. if a user have admin role, we cannot change the role of that user; reason to avoid
+	// accidental changes or attackers revoking access to admins
+
+	if role == constants.RoleAdmin {
+		return "Not allowed to change role of Admins", nil
+	}
+
+	if !isRolePromotion(role, newRole) {
+		var overPriveleges int
+		if role == constants.RoleMaintainer {
+			if newRole == constants.RoleDeveloper {
+				_, overPriveleges, err = svc.accessManager.GetUserAccessByLevels(ctx, userId, 1, 1, constants.AccessLevelMaintainer)
+			}
+			if newRole == constants.RoleGuest {
+				_, overPriveleges, err = svc.accessManager.GetUserAccessByLevels(ctx, userId, 1, 1, constants.AccessLevelMaintainer,
+					constants.AccessLevelDeveloper)
+			}
+		}
+
+		if role == constants.RoleDeveloper {
+			// if the role is developer, only possiblity for new role is guest
+			_, overPriveleges, err = svc.accessManager.GetUserAccessByLevels(ctx, userId, 1, 1, constants.AccessLevelDeveloper)
+		}
+		if err != nil {
+			log.Logger().Error().Err(err).Msgf("Failed to change role due to database errors")
+			return "", err
+		}
+
+		if overPriveleges > 0 {
+			return fmt.Sprintf("User has %d resource(s) with access levels exceeding the new role (%s). Revoke these first.",
+				overPriveleges, newRole), nil
+		}
+	}
+
+	err = svc.store.Users().UnAssignRole(ctx, userId)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to change role due to database errors")
+		return "", err
+	}
+
+	err = svc.store.Users().AssignRole(ctx, userId, newRole)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to change role due to database errors")
+		return "", err
+	}
+
+	return "", nil
+}
+
+func isRolePromotion(currentRole, newRole string) bool {
+	if currentRole == newRole {
+		return false
+	}
+
+	if currentRole == constants.RoleGuest && (newRole == constants.RoleDeveloper ||
+		newRole == constants.RoleMaintainer || newRole == constants.RoleAdmin) {
+		return true
+	}
+
+	if currentRole == constants.RoleDeveloper && (newRole == constants.RoleMaintainer ||
+		newRole == constants.RoleAdmin) {
+		return true
+	}
+
+	if currentRole == constants.RoleMaintainer && newRole == constants.RoleAdmin {
+		return true
+	}
+	return false
+}
+
+func (svc *userService) getUser(reqCtx context.Context, identifier string) (user *models.UserAccount, role string, err error) {
+
+	tx, err := svc.store.Begin(reqCtx)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Error occurred when starting transaction")
+		return nil, "", err
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	ctx := store.WithTxContext(reqCtx, tx)
+
+	user, err = svc.store.Users().Get(ctx, identifier)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Error occurred when retriving user account(%s) from database", identifier)
+		return nil, "", err
+	}
+
+	if user == nil {
+		log.Logger().Warn().Msgf("No user accounts found with %s", identifier)
+		return nil, "", nil
+	}
+
+	role, err = svc.store.Users().GetRole(ctx, user.Id)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Failed to retrieve role of user(%s)", identifier)
+		return nil, "", err
+	}
+
+	return
 }

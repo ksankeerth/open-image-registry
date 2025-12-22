@@ -63,7 +63,8 @@ func (a *resourceAccessStore) List(ctx context.Context, conditions *store.ListQu
 		WithFieldTransformation("namespace_id", "rn.ID").
 		WithFieldTransformation("repository_id", "rr.ID").
 		WithAllowedSortFields("user", "granted_user", "granted_at").
-		WithFieldTransformation("granted_at", "CREATED_AT")
+		WithFieldTransformation("granted_at", "CREATED_AT").
+		WithFieldTransformation("user_id", "ra.USER_ID")
 
 	listQuery, countQuery, args, err := qb.Build(ResourceAccessListBaseQuery, ResourceAccessCountBaseQuery, conditions)
 	if err != nil {

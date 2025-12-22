@@ -25,7 +25,7 @@ var (
 )
 
 var (
-	AllowedResourceAccessFilterFields = []string{"access_level", "resource_type", "resource_id"}
+	AllowedResourceAccessFilterFields = []string{"access_level", "user_id", "resource_type", "resource_id"}
 	AllowedResourceAccessSortFields   = []string{"user", "granted_user", "granted_at"}
 )
 
@@ -33,3 +33,5 @@ const FilterFieldNamespaceID = "namespace_id"
 const FilterFieldIsPublic = "is_public"
 const FilterFieldTagCount = "tags"
 const FilterFieldRepositoryID = "repository_id"
+const FilterFieldAccessLevel = "access_level"
+const FilterFieldUserID = "user_id"

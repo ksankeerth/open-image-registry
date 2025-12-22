@@ -104,21 +104,35 @@ func validateConfig(cfg *AppConfig) (bool, string) {
 	if cfg.Database.Type == "" {
 		return false, "database.type cannot be empty"
 	}
-	if cfg.Database.Path == "" {
+	if cfg.Database.Path == "" && !cfg.Database.AutoCreate {
 		return false, "database.path cannot be empty"
 	}
 	if _, err := os.Stat(filepath.Dir(cfg.Database.Path)); err != nil {
-		return false, fmt.Sprintf("database path directory does not exist: %s", filepath.Dir(cfg.Database.Path))
+		if cfg.Database.AutoCreate {
+			dbDir := filepath.Dir(cfg.Database.Path)
+			err = os.MkdirAll(dbDir, 0755)
+			if err != nil {
+				return false, fmt.Sprintf("unable to create database path: %s due to errors: %v", dbDir, err)
+			}
+		} else {
+			return false, fmt.Sprintf("database path directory does not exist: %s", filepath.Dir(cfg.Database.Path))
+		}
 	}
 
 	// --- Storage ---
 	if cfg.Storage.Type == "" {
 		return false, "storage.type cannot be empty"
 	}
-	if cfg.Storage.Path == "" {
+	if cfg.Storage.Path == "" && !cfg.Storage.AutoCreate {
 		return false, "storage.path cannot be empty"
 	}
-	if _, err := os.Stat(cfg.Storage.Path); err != nil {
+	_, err := os.Stat(cfg.Storage.Path)
+	if err != nil && cfg.Storage.AutoCreate {
+		err1 := os.MkdirAll(cfg.Storage.Path, 0755)
+		if err1 != nil {
+			return false, fmt.Sprintf("unable to create storage directory: %s due to errors: %v", cfg.Storage.Path, err1)
+		}
+	} else if err != nil {
 		return false, fmt.Sprintf("storage path does not exist: %s", cfg.Storage.Path)
 	}
 
@@ -168,8 +182,9 @@ func defaultConfig(severHome string) *AppConfig {
 			CreateAccount: true,
 		},
 		Database: DatabaseConfig{
-			Type: "sqlite",
-			Path: filepath.Join(severHome, "registry_sqlite.db"),
+			Type:       "sqlite",
+			AutoCreate: true,
+			Path:       filepath.Join(severHome, "registry_sqlite.db"),
 		},
 		Storage: StorageConfig{
 			Type: "lfs",
@@ -220,12 +235,14 @@ type AdminUserAccountConfig struct {
 type DatabaseConfig struct {
 	Type        string `yaml:"type"`
 	Path        string `yaml:"path"`
+	AutoCreate  bool   `yaml:"auto_create"`
 	ScriptsPath string `yaml:"scripts_path"`
 }
 
 type StorageConfig struct {
-	Type string `yaml:"type"`
-	Path string `yaml:"path"`
+	Type       string `yaml:"type"`
+	Path       string `yaml:"path"`
+	AutoCreate bool   `yaml:"auto_create"`
 }
 
 type NotificationConfig struct {
