@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/ksankeerth/open-image-registry/log"
 )
 
 const (
@@ -69,7 +71,7 @@ type ListQueryBuilder struct {
 	defaultOperators map[string]FilterOperator
 
 	// Validation
-	allowedFilterFields []string // NEW: Allowed fields for filtering
+	allowedFilterFields []string // Allowed fields for filtering
 	allowedSortFields   []string // Allowed fields for sorting
 
 	isBuilt bool
@@ -142,6 +144,12 @@ func (b *ListQueryBuilder) Build(
 	baseListQuery, countTotalQuery string,
 	conditions *ListQueryConditions,
 ) (listQuery, totalQuery string, args []any, err error) {
+	defer func() {
+		if err == nil {
+			log.Logger().Debug().Str("List Query", listQuery).Str("Total Query", totalQuery).
+				Msg("")
+		}
+	}()
 	if b.isBuilt {
 		return "", "", nil, fmt.Errorf("query builder already used, create a new instance")
 	}
@@ -334,7 +342,8 @@ func (b *ListQueryBuilder) isFilterFieldAllowed(field string) bool {
 	transformedField := b.transformField(field)
 
 	// Check both original and transformed field
-	return slices.Contains(b.allowedFilterFields, field) ||
+	return slices.Contains(b.allowedFilterFields, strings.ToUpper(field)) ||
+		slices.Contains(b.allowedFilterFields, strings.ToLower(field)) ||
 		slices.Contains(b.allowedFilterFields, transformedField)
 }
 
@@ -344,7 +353,7 @@ func (b *ListQueryBuilder) isSortFieldAllowed(field string) bool {
 	transformedField := b.transformField(field)
 
 	// Check both original and transformed field
-	return slices.Contains(b.allowedSortFields, field) ||
+	return slices.Contains(b.allowedSortFields, strings.ToUpper(field)) ||
 		slices.Contains(b.allowedSortFields, transformedField)
 }
 
