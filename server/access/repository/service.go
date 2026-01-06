@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/ksankeerth/open-image-registry/access/resource"
 	"github.com/ksankeerth/open-image-registry/constants"
 	"github.com/ksankeerth/open-image-registry/log"
 	"github.com/ksankeerth/open-image-registry/store"
@@ -13,7 +14,8 @@ import (
 )
 
 type repositoryService struct {
-	store store.Store
+	store         store.Store
+	accessManager *resource.Manager
 }
 
 type createRepoResult struct {
