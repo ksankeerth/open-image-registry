@@ -445,7 +445,10 @@ func (h *UserAPIHandler) GetUserAccountSetupInfo(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if !res.found {
+	// Even if the given recovery id is found in db with a different reason, 
+	// We'll respond to user with 404. To avoid leaking unneccessary data to 
+	// annonymous users
+	if !res.found || res.errorMsg != "" {
 		httperrors.NotFound(w, 404, res.errorMsg)
 		return
 	}
@@ -528,7 +531,6 @@ func (h *UserAPIHandler) Routes() chi.Router {
 		r.Put("/me", h.UpdateCurrentUser)
 		r.Post("/validate", h.ValidateUser)
 		r.Post("/validate-password", h.ValidatePassword)
-		
 
 		r.Put("/{id}/email", h.UpdateUserEmail)
 		r.Put("/{id}/role", h.ChangeRole)
