@@ -9,7 +9,7 @@ import (
 )
 
 func ValidateListUserAccessCondition(cond *store.ListQueryConditions) (bool, string) {
-	if cond.SortField != "" && slices.Contains(constants.AllowedResourceAccessSortFields, cond.SortField) {
+	if cond.SortField != "" && !slices.Contains(constants.AllowedResourceAccessSortFields, cond.SortField) {
 		return false, fmt.Sprintf("Not allowed sort field: %s", cond.SortField)
 	}
 
