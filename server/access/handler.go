@@ -4,6 +4,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/ksankeerth/open-image-registry/access/namespace"
 	"github.com/ksankeerth/open-image-registry/access/repository"
+	"github.com/ksankeerth/open-image-registry/access/resource"
 	"github.com/ksankeerth/open-image-registry/access/upstream"
 	"github.com/ksankeerth/open-image-registry/store"
 )
@@ -14,10 +15,10 @@ type RegistryAccessHandler struct {
 	upstreamHandler   *upstream.UpstreamAccessHandler
 }
 
-func NewRegistryAccessHandler(s store.Store) *RegistryAccessHandler {
+func NewRegistryAccessHandler(s store.Store, accessManager *resource.Manager) *RegistryAccessHandler {
 	return &RegistryAccessHandler{
-		namespaceHandler:  namespace.NewHandler(s),
-		repositoryHandler: repository.NewHandler(s),
+		namespaceHandler:  namespace.NewHandler(s, accessManager),
+		repositoryHandler: repository.NewHandler(s, accessManager),
 		upstreamHandler:   upstream.NewHandler(s),
 	}
 }

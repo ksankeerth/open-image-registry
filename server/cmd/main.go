@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ksankeerth/open-image-registry/access/resource"
 	"github.com/ksankeerth/open-image-registry/client/email"
 	"github.com/ksankeerth/open-image-registry/config"
 	"github.com/ksankeerth/open-image-registry/constants"
@@ -112,8 +113,11 @@ func main() {
 		}
 	}
 
+	// ------------- create instance of resource access manager ----------------
+	accessManager := resource.NewManager(store)
+
 	// ------------ start serving ManagementAPIs and UI -----------------------
-	appRouter := rest.AppRouter(&appConfig.WebApp, store, emailClient)
+	appRouter := rest.AppRouter(&appConfig.WebApp, store, accessManager, emailClient)
 
 	address := fmt.Sprintf("%s:%d", appConfig.Server.Hostname, appConfig.Server.Port)
 
