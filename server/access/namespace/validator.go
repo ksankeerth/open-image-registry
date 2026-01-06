@@ -26,6 +26,18 @@ func validateCreateNamespaceRequest(req *mgmt.CreateNamespaceRequest) (vaild boo
 	return true, ""
 }
 
+func validateUpdateNamespaceRequest(req *mgmt.UpdateNamespaceRequest) (valid bool, errMsg string) {
+	if req.ID == "" {
+		return false, "Invalid Namespace ID in body"
+	}
+
+	if !(req.Purpose == constants.NamespacePurposeProject || req.Purpose == constants.NamespacePurposeTeam) {
+		return false, "Invalid value Namespace purpose"
+	}
+
+	return true, ""
+}
+
 func validateNamespaceGrantAccessRequest(req *mgmt.AccessGrantRequest) (valid bool, errMsg string) {
 	if req.UserID == "" {
 		return false, "Invalid user id"
@@ -67,7 +79,7 @@ func validateNamesapceRevokeRequest(req *mgmt.AccessRevokeRequest) (valid bool, 
 }
 
 func validateListNamespaceCondition(cond *store.ListQueryConditions) (bool, string) {
-	if cond.SortField != "" && slices.Contains(constants.AllowedNamespaceSortFields, cond.SortField) {
+	if cond.SortField != "" && !slices.Contains(constants.AllowedNamespaceSortFields, cond.SortField) {
 		return false, fmt.Sprintf("Not allowed sort field: %s", cond.SortField)
 	}
 
