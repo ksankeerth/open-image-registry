@@ -30,6 +30,8 @@ var (
 )
 
 const FilterFieldNamespaceID = "namespace_id"
+const FilterFieldResourceType = "resource_type"
+const FilterFieldResourceID = "resource_id"
 const FilterFieldIsPublic = "is_public"
 const FilterFieldTagCount = "tags"
 const FilterFieldRepositoryID = "repository_id"

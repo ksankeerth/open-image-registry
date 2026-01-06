@@ -19,9 +19,10 @@ type RepositoryHandler struct {
 	svc *repositoryService
 }
 
-func NewHandler(s store.Store) *RepositoryHandler {
+func NewHandler(s store.Store, accessManager *resource.Manager) *RepositoryHandler {
 	svc := &repositoryService{
-		s,
+		store:         s,
+		accessManager: accessManager,
 	}
 	return &RepositoryHandler{
 		svc,

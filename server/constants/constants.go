@@ -1,7 +1,7 @@
 package constants
 
-const NamespacePurposeTeam = "team"
-const NamespacePurposeProject = "project"
+const NamespacePurposeTeam = "Team"
+const NamespacePurposeProject = "Project"
 
 const ResourceStateActive = "Active"
 const ResourceStateDeprecated = "Deprecated"
