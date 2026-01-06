@@ -24,6 +24,7 @@ type AppConfig struct {
 	WebApp           WebAppConfig           `yaml:"webapp"`
 	Audit            AuditEventsConfig      `yaml:"audit"`
 	Development      DevelopmentConfig      `yaml:"development"`
+	Testing          TestingConfig          `yaml:"testing"`
 }
 
 func LoadConfig(configPath, appHome string) (*AppConfig, error) {
@@ -268,6 +269,10 @@ type DevelopmentConfig struct {
 	MockEmail bool `yaml:"mock_email"`
 }
 
+type TestingConfig struct {
+	AllowDeleteAll bool `yaml:"allow_delete_all"`
+}
+
 type AuditEventsConfig struct {
 	Enable               bool          `yaml:"enable"`
 	VerifyBucketsOnStart bool          `yaml:"verify_buckets_on_start"`
@@ -284,6 +289,13 @@ func GetDevelopmentConfig() DevelopmentConfig {
 		return DevelopmentConfig{}
 	}
 	return appConfiguration.Development
+}
+
+func GetTestingConfig() TestingConfig {
+	if appConfiguration == nil {
+		return TestingConfig{}
+	}
+	return appConfiguration.Testing
 }
 
 func GetImageRegistryConfig() ImageRegistryConfig {

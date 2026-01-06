@@ -43,6 +43,9 @@ webapp:
   enable_ui: false
   dist_path: ${app_home}/webapp/build
 
+testing:
+  allow_delete_all: true
+
 development:
   enable: true
   mock_email: true # Instead of sending email, print the link/uuid in logs
