@@ -51,6 +51,10 @@ func ValidateUserValidateRequest(req *mgmt.UsernameEmailValidationRequest) (bool
 		return false, "Both email and username cannot be empty"
 	}
 
+	if !(utils.IsValidUsername(req.Username) || utils.IsValidEmail(req.Email)) {
+		return false, "Invalid values for fields"
+	}
+
 	return true, ""
 }
 
