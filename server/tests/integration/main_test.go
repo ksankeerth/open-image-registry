@@ -1,17 +1,16 @@
 package integration
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"log"
-	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
 
+	"github.com/ksankeerth/open-image-registry/access/resource"
 	"github.com/ksankeerth/open-image-registry/client/email"
 	"github.com/ksankeerth/open-image-registry/config"
 	"github.com/ksankeerth/open-image-registry/rest"
@@ -19,10 +18,12 @@ import (
 	"github.com/ksankeerth/open-image-registry/store"
 	"github.com/ksankeerth/open-image-registry/store/sqlite"
 	"github.com/ksankeerth/open-image-registry/tests/integration/helpers"
+	"github.com/ksankeerth/open-image-registry/tests/integration/seeder"
+	v1 "github.com/ksankeerth/open-image-registry/tests/integration/v1"
 )
 
 var (
-	testServer      *http.Server
+	testServer      *httptest.Server
 	testStore       store.Store
 	testConfig      *config.AppConfig
 	testBaseURL     string
@@ -62,6 +63,21 @@ func TestMain(m *testing.M) {
 	}
 	log.Println("========================================")
 	os.Exit(exitCode)
+}
+
+func TestIntegrationV1(t *testing.T) {
+	seeder := seeder.NewTestDataSeeder(testBaseURL, testStore)
+
+	suites := []APITestSuite{
+		v1.NewUserTestSuite(seeder, testBaseURL),
+		v1.NewAuthTestSuite(seeder, testBaseURL),
+		v1.NewNamespaceTestSuite(seeder, testBaseURL),
+	}
+
+	for _, suite := range suites {
+		t.Run(fmt.Sprintf("%s: %s", suite.Name(), suite.APIVersion()), suite.Run)
+	}
+
 }
 
 func setupTestEnvironment() error {
@@ -130,31 +146,20 @@ func setupTestEnvironment() error {
 		log.Println("├─ Email client initialized (mock)")
 	}
 
+	// Creating Resource Access Manager
+	accessManager := resource.NewManager(store)
+
 	log.Println("├─ Creating HTTP server...")
-	appRouter := rest.AppRouter(&appConfig.WebApp, store, testEmailClient)
+	appRouter := rest.AppRouter(&appConfig.WebApp, store, accessManager, testEmailClient)
 
-	address := fmt.Sprintf("%s:%d", appConfig.Server.Hostname, appConfig.Server.Port)
-	testBaseURL = fmt.Sprintf("http://%s", address)
+	testServer = httptest.NewServer(appRouter)
+	testBaseURL = testServer.URL
 
-	testServer = &http.Server{
-		Addr:    address,
-		Handler: appRouter,
-	}
-
-	go func() {
-		log.Printf("├─ Starting server on %s...", address)
-		err := testServer.ListenAndServe()
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("└─ Server shutdown unexpectedly")
-		}
-	}()
 
 	if err := helpers.WaitForServer(testBaseURL, 10*time.Second); err != nil {
 		return fmt.Errorf("server failed to start: %w", err)
 	}
 	log.Printf("└─ Server ready at: %s", testBaseURL)
-
-	// TODO: Start registry listeners later. for the moment, the tests will focus on managment REST APIs
 
 	return nil
 }
@@ -163,23 +168,10 @@ func teardownTestEnvironment() error {
 	log.Println("├─ Shutting down HTTP server...")
 
 	if testServer != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		err := testServer.Shutdown(ctx)
-		if err != nil {
-			log.Printf("├─ Server shutdown error: %v", err)
-		} else {
-			log.Println("├─ Server stopped")
+		if testServer != nil {
+			testServer.Close()
 		}
 
-		log.Println("├─ Closing database connections...")
-		err = testStore.Close()
-		if err != nil {
-			log.Printf("├─ Database close error: %v", err)
-		} else {
-			log.Println("├─ Database connections closed")
-		}
 	}
 
 	if testConfig == nil {
