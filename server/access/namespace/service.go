@@ -2,8 +2,10 @@ package namespace
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
+	"github.com/ksankeerth/open-image-registry/access/resource"
 	"github.com/ksankeerth/open-image-registry/constants"
 	"github.com/ksankeerth/open-image-registry/log"
 	"github.com/ksankeerth/open-image-registry/store"
@@ -12,13 +14,14 @@ import (
 )
 
 type namespaceService struct {
-	store store.Store
+	store         store.Store
+	accessManager *resource.Manager
 }
 
 type createNsResult struct {
-	nsId              string
-	conflict          bool
-	invalidMaintainer bool
+	nsId       string
+	statusCode int
+	errMsg     string
 }
 
 func (svc *namespaceService) createNamespace(reqCtx context.Context, req *mgmt.CreateNamespaceRequest) (res *createNsResult, err error) {
@@ -45,33 +48,11 @@ func (svc *namespaceService) createNamespace(reqCtx context.Context, req *mgmt.C
 		return nil, err
 	}
 	if nsModel != nil {
-		res.conflict = true
+		res.statusCode = http.StatusConflict
+		res.errMsg = "Another namespace is available with same name"
 		return res, nil
 	}
 
-	validAccounts, err := svc.store.Users().AreAccountsActive(ctx, req.Maintainers)
-	if err != nil {
-		res.invalidMaintainer = false
-		log.Logger().Error().Err(err).Msg("Error creating namespace: verification of maintainer accounts returned an error.")
-		return nil, err
-	}
-
-	if !validAccounts {
-		res.invalidMaintainer = true
-		return res, nil
-	}
-
-	valid, err := svc.store.NamespaceQueries().ValidateMaintainers(ctx, req.Maintainers)
-	if err != nil {
-		res.invalidMaintainer = false
-		log.Logger().Error().Err(err).Msgf("Error creating namespace: verification roles of maintainers returned an error")
-		return nil, err
-	}
-
-	if !valid {
-		res.invalidMaintainer = true
-		return res, nil
-	}
 
 	res.nsId, err = svc.store.Namespaces().Create(ctx, constants.HostedRegistryID, req.Name, req.Purpose,
 		req.Description, req.IsPublic)
@@ -80,16 +61,31 @@ func (svc *namespaceService) createNamespace(reqCtx context.Context, req *mgmt.C
 		return res, err
 	}
 
-	for _, userId := range req.Maintainers {
-		// TODO: We should provide change "admin" to the actual user later
-		_, err = svc.store.Access().GrantAccess(ctx, res.nsId, constants.ResourceTypeNamespace, userId, constants.AccessLevelMaintainer, "admin")
-		if err != nil {
-			log.Logger().Error().Err(err).Msgf("Error occurred when granting maintainer(%s) access to namespace: %s", userId, req.Name)
-			return res, err
-		}
+	// TODO We'll get admin UUID and pass it. Later, We have to get it from Auth context. Exact approch has TBD
+	admin, err := svc.store.Users().Get(ctx, "admin")
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Error occurred when finding admin's id")
+		return res, err
+	}
+	if admin == nil {
+		return res, fmt.Errorf("no admin account found")
 	}
 
-	return res, nil
+	reason, err := svc.accessManager.GrantAccessBulk(ctx, res.nsId, constants.ResourceTypeNamespace, admin.Id, req.Maintainers,
+		constants.AccessLevelMaintainer)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Granting access to maintainers during namespace(%s) creation failed", req.Name)
+		return res, err
+	}
+
+	if reason != resource.Success {
+		res.statusCode, res.errMsg = reason.MapToHTTP(true)
+		return
+	}
+	res.statusCode = http.StatusCreated
+	res.errMsg = ""
+
+	return res, err
 }
 
 func (svc *namespaceService) namespaceExists(reqCtx context.Context, identifier string) (bool, error) {
@@ -102,13 +98,39 @@ func (svc *namespaceService) namespaceExists(reqCtx context.Context, identifier 
 	return exists, nil
 }
 
-func (svc *namespaceService) deleteNamespace(reqCtx context.Context, identifier string) error {
-	err := svc.store.Namespaces().DeleteByIdentifier(reqCtx, constants.HostedRegistryID, identifier)
+func (svc *namespaceService) deleteNamespace(reqCtx context.Context, identifier string) (notFound bool, err error) {
+	tx, err := svc.store.Begin(reqCtx)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to delete namespace due to transactions errors")
+		return false, err
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	ctx := store.WithTxContext(reqCtx, tx)
+
+	exists, err := svc.store.Namespaces().ExistsByIdentifier(ctx, constants.HostedRegistryID, identifier)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Error in checking namespace: %s", identifier)
+		return false, err
+	}
+
+	if !exists {
+		log.Logger().Warn().Msgf("Attempt to delete non-existing namespace(%s) failed", identifier)
+		return true, err
+	}
+
+	err = svc.store.Namespaces().DeleteByIdentifier(ctx, constants.HostedRegistryID, identifier)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error in deleting namespace: %s", identifier)
-		return err
+		return false, err
 	}
-	return nil
+	return false, nil
 }
 
 func (svc *namespaceService) getNamespace(reqCtx context.Context, identifier string) (m *models.NamespaceModel, err error) {
@@ -205,9 +227,11 @@ func (svc *namespaceService) changeState(reqCtx context.Context, identifier, new
 
 	if ns.State == newState {
 		log.Logger().Debug().Msgf("No changes in state. Updating state of namespace(%s) is skipped", identifier)
-		return nil, nil
+		result.success = true
+		return result, nil
 	}
 
+	log.Logger().Debug().Msgf("Namespace state change request received: Current State: %s, New State: %s", ns.State, newState)
 	if ns.State == constants.ResourceStateActive && newState == constants.ResourceStateDisabled {
 		log.Logger().Warn().Msgf("Not allowed to change namespace(%s) state from 'Active' to 'Disabled'", ns.Id)
 		result.httpErrorMsg = "Not allowed to change namespace state from 'Active' to 'Disabled'"
@@ -219,7 +243,7 @@ func (svc *namespaceService) changeState(reqCtx context.Context, identifier, new
 		log.Logger().Warn().Msgf("Changing state of namespace(%s) to %s. This change will affect associated repositories", ns.Id, newState)
 	}
 
-	err = svc.store.Namespaces().SetStateByID(ctx, ns.Id, constants.ResourceStateDeprecated)
+	err = svc.store.Namespaces().SetStateByID(ctx, ns.Id, newState)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Failed to change state of namespace(%s) due to database errors", ns.Id)
 		return nil, err
@@ -290,128 +314,47 @@ func (svc *namespaceService) changeVisiblity(reqCtx context.Context, identifier 
 }
 
 type grantAccessResult struct {
-	conflict            bool // conflict with existing resource access
-	userNotFound        bool
-	grantedUserNotFound bool
-	resourceNotFound    bool
-	bodyURLMismatch     bool // true if identifier in url doesn't match with ID provided in request
+	statusCode int
+	errMsg     string
 }
 
-func (svc *namespaceService) grantAccess(reqCtx context.Context, identifier string, req *mgmt.AccessGrantRequest) (result *grantAccessResult, err error) {
-	tx, err := svc.store.Begin(reqCtx)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Granting namespace access to user failed to due to transaction errors")
-		return nil, err
-	}
-
-	ctx := store.WithTxContext(reqCtx, tx)
-
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
-		}
-	}()
-
+func (svc *namespaceService) grantAccess(reqCtx context.Context, req *mgmt.AccessGrantRequest) (result *grantAccessResult,
+	err error) {
 	result = &grantAccessResult{}
 
-	user, err := svc.store.Users().Get(ctx, req.UserID)
+	// TODO We'll get admin UUID and pass it. Later, We have to get it from Auth context. Exact approch has TBD
+	admin, err := svc.store.Users().Get(reqCtx, "admin")
 	if err != nil {
-		log.Logger().Error().Err(err).Msg("Granting namespace access failed due to database errors")
-		return nil, err
+		log.Logger().Error().Err(err).Msg("Error occurred when finding admin's id")
+		return result, err
+	}
+	if admin == nil {
+		return result, fmt.Errorf("no admin account found")
 	}
 
-	if user == nil {
-		result.userNotFound = true
-		return result, nil
-	}
-
-	grantedUser, err := svc.store.Users().GetByUsername(ctx, req.GrantedBy)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Granting namespace access failed due to database errors")
-		return nil, err
-	}
-
-	if grantedUser == nil {
-		result.grantedUserNotFound = true
-		return result, nil
-	}
-
-	ns, err := svc.store.Namespaces().Get(ctx, req.ResourceID)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Granting namespace access failed due to database errors")
-		return nil, err
-	}
-	if ns == nil {
-		result.resourceNotFound = true
-		return result, nil
-	}
-
-	if !(identifier == ns.Id || identifier == ns.Name) {
-		result.bodyURLMismatch = true
-		return result, nil
-	}
-
-	access, err := svc.store.Access().GetUserAccess(ctx, req.ResourceID, req.ResourceType, req.UserID)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Granting namespace access failed due to database errors")
-		return nil, err
-	}
-
-	if access != nil {
-		result.conflict = true
-		return result, nil
-	}
-
-	_, err = svc.store.Access().GrantAccess(ctx, req.ResourceID, req.ResourceType, req.UserID, req.GrantedBy,
+	reason, err := svc.accessManager.GrantAccess(reqCtx, req.ResourceID, req.ResourceType, admin.Id, req.UserID,
 		req.AccessLevel)
 	if err != nil {
-		log.Logger().Error().Err(err).Msg("Granting namespace access failed due to database errors")
+		log.Logger().Error().Err(err).Msg("Granting namespace access failed due to errors")
 		return nil, err
 	}
 
+	result.statusCode, result.errMsg = reason.MapToHTTP(false)
 	return result, nil
 }
 
-func (svc *namespaceService) revokeAccess(reqCtx context.Context, identifier string, req *mgmt.AccessRevokeRequest) (notFound bool,
-	mismatch bool, err error) {
-	tx, err := svc.store.Begin(reqCtx)
+func (svc *namespaceService) revokeAccess(reqCtx context.Context, req *mgmt.AccessRevokeRequest) (status int, msg string,
+	err error) {
+
+	//TODO: We pass 'admin' as revoker id. Later, we have to change this to the actual user
+	reason, err := svc.accessManager.RevokeAccess(reqCtx, req.ResourceID, req.ResourceType, req.UserID, "admin")
 	if err != nil {
-		log.Logger().Error().Err(err).Msg("Revoking namespace access failed to due to transaction errors")
-		return false, false, err
+		log.Logger().Error().Err(err).Msgf("Unable to revoke resource access(%s:%s) to user(%s)", req.ResourceType,
+			req.ResourceID, req.UserID)
 	}
 
-	ctx := store.WithTxContext(reqCtx, tx)
-
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
-		}
-	}()
-
-	ns, err := svc.store.Namespaces().Get(ctx, req.ResourceID)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Revoking namespace access failed due to database errors")
-		return false, false, err
-	}
-	if ns == nil {
-		return true, false, nil
-	}
-
-	if !(ns.Id == identifier || ns.Name == identifier) {
-		return false, true, nil
-	}
-
-	err = svc.store.Access().RevokeAccess(ctx, req.ResourceID, req.ResourceType, req.UserID)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Revoking namespace access failed due to database errors")
-		return false, false, err
-	}
-
-	return false, false, nil
+	status, msg = reason.MapToHTTP(false)
+	return
 }
 
 func (svc *namespaceService) listNamespaces(reqCtx context.Context, cond *store.ListQueryConditions) (namespaces []*models.NamespaceView,
@@ -539,8 +482,13 @@ func (svc *namespaceService) listUsers(reqCtx context.Context, identifier string
 		cond = &store.ListQueryConditions{
 			Filters: []store.Filter{
 				{
-					Field:    constants.FilterFieldNamespaceID,
+					Field:    constants.FilterFieldResourceID,
 					Values:   []any{ns.Id},
+					Operator: store.OpEqual,
+				},
+				{
+					Field:    constants.FilterFieldResourceType,
+					Values:   []any{constants.ResourceTypeNamespace},
 					Operator: store.OpEqual,
 				},
 			},
@@ -551,19 +499,29 @@ func (svc *namespaceService) listUsers(reqCtx context.Context, identifier string
 		}
 	} else {
 		if cond.Filters == nil {
-			cond.Filters = []store.Filter{
-				{
-					Field:    constants.FilterFieldNamespaceID,
+			cond.Filters = append(cond.Filters,
+				store.Filter{
+					Field:    constants.FilterFieldResourceID,
 					Values:   []any{ns.Id},
 					Operator: store.OpEqual,
 				},
-			}
+				store.Filter{
+					Field:    constants.FilterFieldResourceType,
+					Values:   []any{constants.ResourceTypeNamespace},
+					Operator: store.OpEqual,
+				})
 		} else {
-			cond.Filters = append(cond.Filters, store.Filter{
-				Field:    constants.FilterFieldNamespaceID,
-				Values:   []any{ns.Id},
-				Operator: store.OpEqual,
-			})
+			cond.Filters = append(cond.Filters,
+				store.Filter{
+					Field:    constants.FilterFieldResourceID,
+					Values:   []any{ns.Id},
+					Operator: store.OpEqual,
+				},
+				store.Filter{
+					Field:    constants.FilterFieldResourceType,
+					Values:   []any{constants.ResourceTypeNamespace},
+					Operator: store.OpEqual,
+				})
 		}
 	}
 
