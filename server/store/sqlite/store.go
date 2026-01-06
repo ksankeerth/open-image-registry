@@ -80,6 +80,7 @@ func NewWithDB(db *sql.DB) *Store {
 	s.repository = newRepositoryStore(db)
 	s.upstream = newUpstreamStore(db)
 	s.user = newUserStore(db)
+	s.tag = newImageStore(db)
 
 	s.queries = newQueries(db)
 
@@ -125,6 +126,14 @@ func (s *Store) ImageQueries() store.ImageQueries {
 	return s.queries
 }
 func (s *Store) NamespaceQueries() store.NamespaceQueries {
+	return s.queries
+}
+
+func (s *Store) UserQueries() store.UserQueries {
+	return s.queries
+}
+
+func (s *Store) AccessQueries() store.AccessQueries {
 	return s.queries
 }
 

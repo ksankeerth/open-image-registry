@@ -21,6 +21,8 @@ type Store interface {
 	// Queries
 	ImageQueries() ImageQueries
 	NamespaceQueries() NamespaceQueries
+	UserQueries() UserQueries
+	AccessQueries() AccessQueries
 
 	// Lifecycle
 	Close() error

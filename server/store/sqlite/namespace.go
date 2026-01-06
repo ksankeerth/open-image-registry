@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ksankeerth/open-image-registry/config"
 	"github.com/ksankeerth/open-image-registry/errors/dberrors"
 	"github.com/ksankeerth/open-image-registry/log"
 	"github.com/ksankeerth/open-image-registry/store"
@@ -55,7 +56,7 @@ func (n *namespaceStore) Get(ctx context.Context, id string) (*models.NamespaceM
 
 	var m models.NamespaceModel
 	var publicNamespace int
-	err := row.Scan(&m.RegistryId, &m.Name, &m.Description, &m.Purpose, &publicNamespace, &createdAt, &updatedAt)
+	err := row.Scan(&m.RegistryId, &m.Name, &m.Description, &m.Purpose, &publicNamespace, &m.State, &createdAt, &updatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil // not found
@@ -81,6 +82,8 @@ func (n *namespaceStore) Get(ctx context.Context, id string) (*models.NamespaceM
 		m.IsPublic = true
 	}
 
+	m.Id = id
+
 	return &m, nil
 }
 
@@ -92,7 +95,7 @@ func (n *namespaceStore) GetByName(ctx context.Context, regId, name string) (*mo
 	var createdAt, updatedAt string
 
 	var m models.NamespaceModel
-	err := row.Scan(&m.RegistryId, &m.Name, &m.Description, &m.Purpose, &m.IsPublic, &createdAt, &updatedAt)
+	err := row.Scan(&m.RegistryId, &m.Name, &m.Description, &m.Purpose, &m.IsPublic, &m.State, &createdAt, &updatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil // not found
@@ -182,7 +185,7 @@ func (n *namespaceStore) GetByIdentifier(ctx context.Context, registryId, identi
 	var isPublic int
 
 	err := q.QueryRowContext(ctx, NamespaceGetByIdentifierQuery, registryId, identifier, identifier).Scan(&m.Id,
-		&m.RegistryId, &m.Name, &m.Description, &m.Purpose, &m.IsPublic, &createdAt, &updatedAt)
+		&m.RegistryId, &m.Name, &m.Description, &m.Purpose, &m.IsPublic, &m.State, &createdAt, &updatedAt)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -235,7 +238,7 @@ func (n *namespaceStore) SetStateByID(ctx context.Context, id, state string) err
 	_, err := q.ExecContext(ctx, NamespaceSetStateQuery, state, id)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("failed to update state")
-		return dberrors.ClassifyError(err, NamespaceGetByIdentifierQuery)
+		return dberrors.ClassifyError(err, NamespaceSetStateQuery)
 	}
 
 	return nil
@@ -359,4 +362,19 @@ func (n *namespaceStore) scanNamespaceView(rows *sql.Rows) (*models.NamespaceVie
 	}
 
 	return &ns, nil
+}
+
+func (n *namespaceStore) DeleteAll(ctx context.Context) error {
+	if !config.GetTestingConfig().AllowDeleteAll {
+		return fmt.Errorf("Not allowed to delete all namespaces.")
+	}
+	q := n.getQuerier(ctx)
+
+	_, err := q.ExecContext(ctx, NamespaceDeleteAll)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("failed to delete all namespace")
+		return dberrors.ClassifyError(err, NamespaceDeleteAll)
+	}
+
+	return nil
 }

@@ -115,3 +115,15 @@ func (r *accountRecoveryStore) DeleteByUserID(ctx context.Context, userId string
 
 	return nil
 }
+
+func (r *accountRecoveryStore) UpdateReason(ctx context.Context, recoveryID string, reason uint) error {
+	q := r.getQuerier(ctx)
+
+	_, err := q.ExecContext(ctx, AccountRecoveryUpdateReasonQuery, reason, recoveryID)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("faile dto update account recovery reason")
+		return dberrors.ClassifyError(err, AccountRecoveryUpdateReasonQuery)
+	}
+
+	return nil
+}

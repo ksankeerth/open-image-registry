@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/ksankeerth/open-image-registry/errors/dberrors"
@@ -32,11 +33,15 @@ func (q *queries) getQuerier(ctx context.Context) store.Querier {
 func (q *queries) ValidateMaintainers(ctx context.Context, userIds []string) (bool, error) {
 	qr := q.getQuerier(ctx)
 
-	placeHolders := "( " + strings.Repeat("?, ", len(userIds)-1) + " )"
+	placeHolders := strings.Join(slices.Repeat([]string{"?"}, len(userIds)), ",")
 	query := fmt.Sprintf(CountMaintainersByIdsQuery, placeHolders)
 
 	var validMaintainers int
-	err := qr.QueryRowContext(ctx, query, userIds).Scan(&validMaintainers)
+	args := make([]any, len(userIds))
+	for i, v := range userIds {
+		args[i] = v
+	}
+	err := qr.QueryRowContext(ctx, query, args...).Scan(&validMaintainers)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			log.Logger().Warn().Msg("none of users are valid maintainers")
@@ -47,6 +52,96 @@ func (q *queries) ValidateMaintainers(ctx context.Context, userIds []string) (bo
 	}
 
 	return validMaintainers == len(userIds), nil
+}
+
+func (q *queries) CountUsersByIDs(ctx context.Context, userIds []string) (int, error) {
+	qr := q.getQuerier(ctx)
+
+	userIdPlaceHolders := strings.Join(slices.Repeat([]string{"?"}, len(userIds)), ",")
+
+	query := fmt.Sprintf(CountMatchingUsersByIDs, userIdPlaceHolders)
+	var matchingUsers int
+
+	idArgs := make([]any, len(userIds))
+	for i, v := range userIds {
+		idArgs[i] = v
+	}
+
+	err := qr.QueryRowContext(ctx, query, idArgs...).Scan(&matchingUsers)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Logger().Warn().Msg("no matching users by ids")
+			return -1, nil
+		}
+		log.Logger().Error().Err(err).Msg("failed to count matching users by ids")
+		return -1, dberrors.ClassifyError(err, query)
+	}
+
+	return matchingUsers, nil
+}
+
+func (q *queries) CountUsersByIDsAndRoles(ctx context.Context, userIds []string, roles []string) (int,
+	error) {
+	qr := q.getQuerier(ctx)
+
+	userIdPlaceHolders := strings.Join(slices.Repeat([]string{"?"}, len(userIds)), ",")
+	rolePlaceHolders := strings.Join(slices.Repeat([]string{"?"}, len(roles)), ",")
+
+	query := fmt.Sprintf(CountMatchingUsersByIDsAndRoles, userIdPlaceHolders, rolePlaceHolders)
+	var matchingUsers int
+
+	idArgs := make([]any, len(userIds))
+	for i, v := range userIds {
+		idArgs[i] = v
+	}
+
+	roleArgs := make([]any, len(roles))
+	for i, v := range roles {
+		roleArgs[i] = v
+	}
+	allArgs := make([]any, len(idArgs)+len(roleArgs))
+	allArgs = append(idArgs, roleArgs...)
+	err := qr.QueryRowContext(ctx, query, allArgs...).Scan(&matchingUsers)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Logger().Warn().Msg("no matching users")
+			return -1, nil
+		}
+		log.Logger().Error().Err(err).Msg("failed to count matching users")
+		return -1, dberrors.ClassifyError(err, query)
+	}
+
+	return matchingUsers, nil
+}
+
+func (q *queries) CountUsersByResourceAccess(ctx context.Context, userIds []string, resourceType,
+	resourceID string) (int, error) {
+	qr := q.getQuerier(ctx)
+
+	userIdPlaceHolders := strings.Join(slices.Repeat([]string{"?"}, len(userIds)), ",")
+
+	query := fmt.Sprintf(CountMatchingUsersHaveAccessToResource, userIdPlaceHolders)
+	var matchingUsers int
+
+	idArgs := make([]any, len(userIds))
+	for i, v := range userIds {
+		idArgs[i] = v
+	}
+
+	allArgs := []any{resourceType, resourceID}
+	allArgs = append(allArgs, idArgs...)
+
+	err := qr.QueryRowContext(ctx, query, allArgs...).Scan(&matchingUsers)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Logger().Warn().Msg("no matching users")
+			return -1, nil
+		}
+		log.Logger().Error().Err(err).Msg("failed to count matching users")
+		return -1, dberrors.ClassifyError(err, query)
+	}
+
+	return matchingUsers, nil
 }
 
 func (q *queries) GetManifestByTag(ctx context.Context, withContent bool, repositoryId,

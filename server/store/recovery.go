@@ -16,4 +16,6 @@ type AccountRecoveryStore interface {
 	Delete(ctx context.Context, uuid string) (err error)
 
 	DeleteByUserID(ctx context.Context, userId string) (err error)
+
+	UpdateReason(ctx context.Context, recoveryID string, reason uint) error 
 }

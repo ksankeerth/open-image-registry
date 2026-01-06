@@ -33,4 +33,8 @@ type NamespaceStore interface {
 	SetVisiblityByID(ctx context.Context, id string, public bool) error
 
 	List(ctx context.Context, conditions *ListQueryConditions) (users []*models.NamespaceView, total int, err error)
+
+	// DeleteAll deletes all the records from table. The implementation should only this method only
+	// when `testing.allow_delete_all` is set to true.
+	DeleteAll(ctx context.Context) error
 }

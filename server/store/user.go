@@ -43,4 +43,5 @@ type UserStore interface {
 	UnAssignRole(ctx context.Context, userId string) error
 
 	AreAccountsActive(ctx context.Context, userIds []string) (valid bool, err error)
+
 }

@@ -59,12 +59,13 @@ func (a *resourceAccessStore) List(ctx context.Context, conditions *store.ListQu
 
 	qb := store.NewQueryBuilder(store.DBTypeSqlite).
 		WithSearchFields("user").
-		WithAllowedFilterFields("access_level", "resource_type", "resource_id", "namespace_id", "repository_id").
-		WithFieldTransformation("namespace_id", "rn.ID").
-		WithFieldTransformation("repository_id", "rr.ID").
+		WithAllowedFilterFields("access_level", "resource_type", "resource_id").
+		WithFieldTransformation("resource_id", "ra.RESOURCE_ID").
+		WithFieldTransformation("resource_type", "ra.RESOURCE_TYPE").
 		WithAllowedSortFields("user", "granted_user", "granted_at").
 		WithFieldTransformation("granted_at", "CREATED_AT").
-		WithFieldTransformation("user_id", "ra.USER_ID")
+		WithFieldTransformation("user_id", "ra.USER_ID").
+		WithFieldTransformation("user", "ua.USERNAME")
 
 	listQuery, countQuery, args, err := qb.Build(ResourceAccessListBaseQuery, ResourceAccessCountBaseQuery, conditions)
 	if err != nil {

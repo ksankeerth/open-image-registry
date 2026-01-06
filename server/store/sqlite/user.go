@@ -156,7 +156,8 @@ func (u *userStore) Get(ctx context.Context, identifier string) (*models.UserAcc
 	q := u.getQuerier(ctx)
 
 	var m models.UserAccount
-	var createdAt, updatedAt, lockedAt string
+	var createdAt, updatedAt string
+	var lockedAt sql.NullString
 	var locked int
 
 	row := q.QueryRowContext(ctx, UserGetUserAccountQuery, identifier, identifier)
@@ -175,6 +176,18 @@ func (u *userStore) Get(ctx context.Context, identifier string) (*models.UserAcc
 
 	m.Locked = locked != 0
 
+	if m.Locked {
+		if !lockedAt.Valid {
+			log.Logger().Warn().Msgf("user account(%s) is in locked state but locked timestamp is not available", identifier)
+		} else {
+			m.LockedAt, err = utils.ParseSqliteTimestamp(lockedAt.String)
+			if err != nil {
+				log.Logger().Error().Err(err).Msg("failed to retrieve user")
+				return nil, dberrors.ClassifyError(err, UserGetUserAccountQuery)
+			}
+		}
+	}
+
 	createdTime, err := utils.ParseSqliteTimestamp(createdAt)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("failed to retrieve user")
@@ -183,12 +196,6 @@ func (u *userStore) Get(ctx context.Context, identifier string) (*models.UserAcc
 	m.CreatedAt = *createdTime
 
 	m.UpdatedAt, err = utils.ParseSqliteTimestamp(updatedAt)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("failed to retrieve user")
-		return nil, dberrors.ClassifyError(err, UserGetUserAccountQuery)
-	}
-
-	m.LockedAt, err = utils.ParseSqliteTimestamp(lockedAt)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("failed to retrieve user")
 		return nil, dberrors.ClassifyError(err, UserGetUserAccountQuery)
@@ -469,11 +476,15 @@ func (u *userStore) UnAssignRole(ctx context.Context, userId string) error {
 func (u *userStore) AreAccountsActive(ctx context.Context, userIds []string) (valid bool, err error) {
 	q := u.getQuerier(ctx)
 
-	placeHolders := "( " + strings.Repeat("?, ", len(userIds)-1) + " )"
+	placeHolders := strings.Join(slices.Repeat([]string{"?"}, len(userIds)), ",")
 	query := fmt.Sprintf(UserCountActiveAccountByIdsQuery, placeHolders)
 
 	var validAccounts int
-	err = q.QueryRowContext(ctx, query, userIds).Scan(&validAccounts)
+	args := make([]any, len(userIds))
+	for i, v := range userIds {
+		args[i] = v
+	}
+	err = q.QueryRowContext(ctx, query, args...).Scan(&validAccounts)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			log.Logger().Warn().Msg("none of user accounts are valid")
