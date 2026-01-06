@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS UPSTREAM_REGISTRY(
     'docker_hub', 'gcr', 'ecr', 'acr', 'ghcr', 'gitlab', 
     'quay', 'harbor', 'artifactory', 'nexus', 'custom'
   )),
-  STATE TEXT NOT NULL DEFAULT 'active' CHECK(STATE IN ('active', 'deprecated', 'disabled')),
+  STATE TEXT NOT NULL DEFAULT 'active' CHECK(STATE IN ('Active', 'Deprecated', 'Disabled')),
   PORT INTEGER NOT NULL UNIQUE CHECK(PORT BETWEEN 1025 AND 65535),
   UPSTREAM_URL TEXT NOT NULL CHECK(
     UPSTREAM_URL LIKE 'http%' AND 
@@ -373,7 +373,7 @@ CREATE TABLE IF NOT EXISTS RESOURCE_ACCESS (
     RESOURCE_TYPE TEXT NOT NULL CHECK(RESOURCE_TYPE IN ('namespace', 'repository', 'upstream_registry')),
     RESOURCE_ID TEXT NOT NULL,
     USER_ID TEXT NOT NULL,
-    ACCESS_LEVEL TEXT NOT NULL CHECK(ACCESS_LEVEL IN ('maintainer', 'developer', 'guest')),
+    ACCESS_LEVEL TEXT NOT NULL CHECK(ACCESS_LEVEL IN ('Maintainer', 'Developer', 'Guest')),
     GRANTED_BY TEXT NOT NULL, -- USER_ID who granted this access
     CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(RESOURCE_ID, USER_ID, RESOURCE_TYPE),
