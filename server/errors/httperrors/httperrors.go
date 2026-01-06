@@ -18,6 +18,18 @@ type HTTPError struct {
 	Message    string
 }
 
+func SendError(w http.ResponseWriter, statusCode int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	if encodeErr := json.NewEncoder(w).Encode(ErrorResponse{
+		Code:    statusCode,
+		Message: message,
+	}); encodeErr != nil {
+		// Optionally log the error if JSON encoding fails
+		// log.Println("Failed to encode error response:", encodeErr)
+	}
+}
+
 // writeError writes the error response as JSON
 func writeError(w http.ResponseWriter, err HTTPError) {
 	w.Header().Set("Content-Type", "application/json")
