@@ -1191,7 +1191,7 @@ func (n *NamespaceTestSuite) testListNamespaces(t *testing.T) {
 			if tc.total != -1 {
 				require.Equal(t, float64(tc.total), total)
 			}
-			namespaces, ok := resBody["namespaces"].([]any)
+			namespaces, ok := resBody["entities"].([]any)
 			require.True(t, ok)
 
 			var resultIds []string
@@ -1394,7 +1394,7 @@ func (n *NamespaceTestSuite) testNamespaceUserAccessList(t *testing.T) {
 			}
 
 			require.Equal(t, float64(tc.total), resBody["total"])
-			accessList, ok := resBody["accesses"].([]any)
+			accessList, ok := resBody["entities"].([]any)
 			require.True(t, ok)
 			assert.Equal(t, tc.countCurrentPage, len(accessList))
 

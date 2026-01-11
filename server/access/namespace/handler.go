@@ -69,16 +69,16 @@ func (h *NamespaceHandler) listNamespaces(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	res := mgmt.ListNamespacesResponse{
-		Total:      total,
-		Page:       int(cond.Page),
-		Limit:      int(cond.Limit),
-		Namespaces: make([]*mgmt.NamespaceViewDTO, len(namespaces)),
+	res := mgmt.EntityListResponse[*mgmt.NamespaceViewDTO]{
+		Total:    total,
+		Page:     int(cond.Page),
+		Limit:    int(cond.Limit),
+		Entities: make([]*mgmt.NamespaceViewDTO, len(namespaces)),
 	}
 
 	for index, ns := range namespaces {
 		nsDto := toNamespaceViewDTO(ns)
-		res.Namespaces[index] = nsDto
+		res.Entities[index] = nsDto
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -404,16 +404,16 @@ func (h *NamespaceHandler) listUserAccess(w http.ResponseWriter, r *http.Request
 
 	userAccesses, total, err := h.svc.listUsers(r.Context(), id, cond)
 
-	res := mgmt.ListResourceAccessResponse{
+	res := mgmt.EntityListResponse[*mgmt.ResourceAccessViewDTO]{
 		Total:    total,
 		Page:     int(cond.Page),
 		Limit:    int(cond.Limit),
-		Accesses: make([]*mgmt.ResourceAccessViewDTO, len(userAccesses)),
+		Entities: make([]*mgmt.ResourceAccessViewDTO, len(userAccesses)),
 	}
 
 	for index, access := range userAccesses {
 		dto := resource.ToResourceAccessViewDTO(access)
-		res.Accesses[index] = dto
+		res.Entities[index] = dto
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -298,16 +298,16 @@ func (h *RepositoryHandler) listUserAccess(w http.ResponseWriter, r *http.Reques
 
 	userAccesses, total, err := h.svc.listUsers(r.Context(), id, cond)
 
-	res := mgmt.ListResourceAccessResponse{
+	res := mgmt.EntityListResponse[*mgmt.ResourceAccessViewDTO]{
 		Total:    total,
 		Page:     int(cond.Page),
 		Limit:    int(cond.Limit),
-		Accesses: make([]*mgmt.ResourceAccessViewDTO, len(userAccesses)),
+		Entities: make([]*mgmt.ResourceAccessViewDTO, len(userAccesses)),
 	}
 
 	for index, access := range userAccesses {
 		dto := resource.ToResourceAccessViewDTO(access)
-		res.Accesses[index] = dto
+		res.Entities[index] = dto
 	}
 
 	w.Header().Set("Content-Type", "application/json")

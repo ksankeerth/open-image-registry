@@ -49,16 +49,16 @@ func (h *UserAPIHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := mgmt.ListUsersResponse{
-		Total: total,
-		Page:  int(cond.Page),
-		Limit: int(cond.Limit),
-		Users: make([]*mgmt.UserAccountViewDTO, len(users)),
+	res := mgmt.EntityListResponse[*mgmt.UserAccountViewDTO]{
+		Total:    total,
+		Page:     int(cond.Page),
+		Limit:    int(cond.Limit),
+		Entities: make([]*mgmt.UserAccountViewDTO, len(users)),
 	}
 
 	for index, user := range users {
 		userDto := h.adapter.ToUserAccountViewDTO(user)
-		res.Users[index] = userDto
+		res.Entities[index] = userDto
 	}
 
 	w.Header().Set("Content-Type", "application/json")

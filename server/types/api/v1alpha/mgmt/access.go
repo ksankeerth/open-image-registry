@@ -61,10 +61,3 @@ type ResourceAccessViewDTO struct {
 	GrantedBy    string    `json:"granted_by"`   // granted_user_id
 	GrantedAt    time.Time `json:"granted_at"`
 }
-
-type ListResourceAccessResponse struct {
-	Total    int                  `json:"total"`
-	Page     int                  `json:"page"`
-	Limit    int                  `json:"limit"`
-	Accesses []*ResourceAccessViewDTO `json:"accesses"`
-}
