@@ -35,8 +35,7 @@ func (h *NamespaceHandler) Routes() chi.Router {
 
 	r.Post("/", h.createNamespace)
 	r.Get("/", h.listNamespaces)
-	// identifier can be uuid value or name.
-	r.Route("/{identifier}", func(r chi.Router) {
+	r.Route("/{id}", func(r chi.Router) {
 		r.Head("/", h.namespaceExists)
 		r.Get("/", h.getNamespace)
 		r.Put("/", h.updateNamespace)
@@ -130,9 +129,9 @@ func (h *NamespaceHandler) createNamespace(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *NamespaceHandler) namespaceExists(w http.ResponseWriter, r *http.Request) {
-	identifier := chi.URLParam(r, "identifier")
+	id := chi.URLParam(r, "id")
 
-	exists, err := h.svc.namespaceExists(r.Context(), identifier)
+	exists, err := h.svc.namespaceExists(r.Context(), id)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
 		httperrors.InternalError(w, 500, "Request aborted due to errors")
@@ -146,9 +145,9 @@ func (h *NamespaceHandler) namespaceExists(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *NamespaceHandler) deleteNamespace(w http.ResponseWriter, r *http.Request) {
-	identifier := chi.URLParam(r, "identifier")
+	id := chi.URLParam(r, "id")
 
-	notFound, err := h.svc.deleteNamespace(r.Context(), identifier)
+	notFound, err := h.svc.deleteNamespace(r.Context(), id)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
 		httperrors.InternalError(w, 500, "Request aborted due to errors")
@@ -164,9 +163,9 @@ func (h *NamespaceHandler) deleteNamespace(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *NamespaceHandler) getNamespace(w http.ResponseWriter, r *http.Request) {
-	identifier := chi.URLParam(r, "identifier")
+	id := chi.URLParam(r, "id")
 
-	ns, err := h.svc.getNamespace(r.Context(), identifier)
+	ns, err := h.svc.getNamespace(r.Context(), id)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
 		httperrors.InternalError(w, 500, "Request aborted due to errors")
@@ -189,7 +188,7 @@ func (h *NamespaceHandler) getNamespace(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *NamespaceHandler) updateNamespace(w http.ResponseWriter, r *http.Request) {
-	identifier := chi.URLParam(r, "identifier")
+	id := chi.URLParam(r, "id")
 
 	var request mgmt.UpdateNamespaceRequest
 
@@ -206,7 +205,7 @@ func (h *NamespaceHandler) updateNamespace(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	notFound, err := h.svc.updateNamespace(r.Context(), identifier, &request)
+	notFound, err := h.svc.updateNamespace(r.Context(), id, &request)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("Request aborted due to errors")
 		httperrors.InternalError(w, 500, "Request aborted due to errors")
@@ -222,7 +221,7 @@ func (h *NamespaceHandler) updateNamespace(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *NamespaceHandler) changeState(w http.ResponseWriter, r *http.Request) {
-	identifier := chi.URLParam(r, "identifier")
+	id := chi.URLParam(r, "id")
 	state := r.URL.Query().Get("state")
 
 	if state == "" {
@@ -238,7 +237,7 @@ func (h *NamespaceHandler) changeState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.svc.changeState(r.Context(), identifier, state)
+	result, err := h.svc.changeState(r.Context(), id, state)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("Request aborted due to errors")
 		httperrors.InternalError(w, 500, "Request aborted due to errors")
@@ -258,7 +257,7 @@ func (h *NamespaceHandler) changeState(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *NamespaceHandler) changeVisiblity(w http.ResponseWriter, r *http.Request) {
-	identifier := chi.URLParam(r, "identifier")
+	id := chi.URLParam(r, "id")
 	visibility := r.URL.Query().Get("public")
 
 	isPublic, err := strconv.ParseBool(visibility)
@@ -268,7 +267,7 @@ func (h *NamespaceHandler) changeVisiblity(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	result, err := h.svc.changeVisiblity(r.Context(), identifier, isPublic)
+	result, err := h.svc.changeVisiblity(r.Context(), id, isPublic)
 
 	if result.success {
 		w.WriteHeader(http.StatusOK)
@@ -285,7 +284,7 @@ func (h *NamespaceHandler) changeVisiblity(w http.ResponseWriter, r *http.Reques
 
 func (h *NamespaceHandler) grantUserAccess(w http.ResponseWriter, r *http.Request) {
 	var request mgmt.AccessGrantRequest
-	id := chi.URLParam(r, "identifier")
+	id := chi.URLParam(r, "id")
 
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
@@ -321,7 +320,7 @@ func (h *NamespaceHandler) grantUserAccess(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *NamespaceHandler) revokeUserAccess(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "identifier")
+	id := chi.URLParam(r, "id")
 
 	var request mgmt.AccessRevokeRequest
 
@@ -360,7 +359,7 @@ func (h *NamespaceHandler) revokeUserAccess(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *NamespaceHandler) listRepositories(w http.ResponseWriter, r *http.Request) {
-	identifier := chi.URLParam(r, "identifier")
+	id := chi.URLParam(r, "id")
 
 	cond := lib.ParseListConditions(r, map[string]store.FilterOperator{})
 
@@ -370,7 +369,7 @@ func (h *NamespaceHandler) listRepositories(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	repositories, total, err := h.svc.listRepositories(r.Context(), identifier, cond)
+	repositories, total, err := h.svc.listRepositories(r.Context(), id, cond)
 
 	res := mgmt.ListRepositoriesResponse{
 		Total:        total,
@@ -393,7 +392,7 @@ func (h *NamespaceHandler) listRepositories(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *NamespaceHandler) listUserAccess(w http.ResponseWriter, r *http.Request) {
-	identifier := chi.URLParam(r, "identifier")
+	id := chi.URLParam(r, "id")
 
 	cond := lib.ParseListConditions(r, map[string]store.FilterOperator{})
 
@@ -403,7 +402,7 @@ func (h *NamespaceHandler) listUserAccess(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	userAccesses, total, err := h.svc.listUsers(r.Context(), identifier, cond)
+	userAccesses, total, err := h.svc.listUsers(r.Context(), id, cond)
 
 	res := mgmt.ListResourceAccessResponse{
 		Total:    total,
