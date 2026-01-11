@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/ksankeerth/open-image-registry/errors/dberrors"
 	"github.com/ksankeerth/open-image-registry/log"
@@ -495,4 +496,16 @@ func (u *userStore) AreAccountsActive(ctx context.Context, userIds []string) (va
 	}
 
 	return validAccounts == len(userIds), nil
+}
+
+func (u *userStore) RecordLastAccessedTime(ctx context.Context, userId string, t time.Time) error {
+	q := u.getQuerier(ctx)
+
+	_, err := q.ExecContext(ctx, UserRecordLastAccessedTime, t, userId)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("failed to record user last accessed time")
+		return dberrors.ClassifyError(err, UserRecordLastAccessedTime)
+	}
+
+	return nil
 }

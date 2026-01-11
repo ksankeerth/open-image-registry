@@ -3,11 +3,11 @@ package auth
 import (
 	"context"
 	"net/http"
-	"sync"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/ksankeerth/open-image-registry/config"
 	"github.com/ksankeerth/open-image-registry/constants"
+	"github.com/ksankeerth/open-image-registry/lib"
 	"github.com/ksankeerth/open-image-registry/log"
 	"github.com/ksankeerth/open-image-registry/security"
 	"github.com/ksankeerth/open-image-registry/store"
@@ -16,91 +16,32 @@ import (
 )
 
 type authService struct {
-	store          store.Store
-	scopeRoleMap   map[string][]string
-	scopeRoleMapMu sync.Mutex
+	store            store.Store
+	jwtAuthenticator lib.JWTProvider
 }
-
-// currently, no use of scope role binding. So i comment it, later we can
-// think about it.
-// func (svc *authService) loadScopesFromDB() error {
-// 	svc.scopeRoleMapMu.Lock()
-// 	defer svc.scopeRoleMapMu.Unlock()
-
-// 	scopeBindings, err := svc.store.Auth().GetAllScopeRoleBindings(context.Background())
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	for _, binding := range scopeBindings {
-// 		roles, ok := svc.scopeRoleMap[binding.ScopeName]
-// 		if ok {
-// 			if !slices.Contains(roles, binding.RoleName) {
-// 				roles = append(roles, binding.RoleName)
-// 				svc.scopeRoleMap[binding.ScopeName] = roles
-// 			}
-// 		} else {
-// 			svc.scopeRoleMap[binding.ScopeName] = []string{binding.RoleName}
-// 		}
-// 	}
-// 	return nil
-// }
-
-// func (svc *authService) canAccessScope(scopeName, roleName string) bool {
-// 	roles, ok := svc.scopeRoleMap[scopeName]
-// 	if !ok {
-// 		err := svc.loadScopesFromDB()
-// 		if err != nil {
-// 			log.Logger().Error().Err(err).Msg("Error occurred when loading scope role bindings from database")
-// 			return false
-// 		}
-// 	}
-// 	roles = svc.scopeRoleMap[scopeName]
-// 	if roles == nil || len(roles) == 0 {
-// 		return false
-// 	}
-
-// 	return slices.Contains(roles, roleName)
-// }
-
-// func (svc *authService) getAuthorizedScopes(requestedScopes []string, roleName string) []string {
-// 	if requestedScopes == nil {
-// 		return []string{}
-// 	}
-
-// 	authorizedScopes := make([]string, 0)
-// 	for _, scope := range requestedScopes {
-// 		if svc.canAccessScope(scope, roleName) {
-// 			authorizedScopes = append(authorizedScopes, scope)
-// 		}
-// 	}
-
-// 	return authorizedScopes
-// }
 
 type authLoginResult struct {
-	statusCode       int
-	success          bool
-	errorMessage     string
-	sessionId        string
-	expiresAt        *time.Time
-	userRole         string
-	authorizedScopes []string
+	statusCode      int
+	success         bool
+	errorMessage    string
+	userRole        string
+	userID          string
+	username        string
+	jwtToken        string
+	expiryInSeconds int
 }
 
-func (svc *authService) authenticateUser(loginRequest *mgmt.AuthLoginRequest, userAgent, clientIp string) (*models.UserAccount, *authLoginResult) {
-
+func (svc *authService) authenticateUser(reqCtx context.Context, req *mgmt.AuthLoginRequest, userAgent, clientIp string) (*authLoginResult, error) {
 	loginRes := &authLoginResult{}
 
-	ctx := context.Background()
-	tx, err := svc.store.Begin(ctx)
+	tx, err := svc.store.Begin(reqCtx)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("error occurred when starting transaction")
 
 		loginRes.success = false
 		loginRes.errorMessage = "Opps! Error occured when logging in!"
 		loginRes.statusCode = http.StatusInternalServerError
-		return nil, loginRes
+		return loginRes, err
 	}
 	defer func() {
 		if err != nil {
@@ -110,23 +51,24 @@ func (svc *authService) authenticateUser(loginRequest *mgmt.AuthLoginRequest, us
 		}
 	}()
 
-	ctx = store.WithTxContext(ctx, tx)
+	ctx := store.WithTxContext(reqCtx, tx)
 
-	userAccount, err := svc.store.Users().GetByUsername(ctx, loginRequest.Username)
+	userAccount, err := svc.store.Users().GetByUsername(ctx, req.Username)
 	if err != nil {
 		loginRes.success = false
 		loginRes.errorMessage = "Opps! Error occured when logging in!"
 		loginRes.statusCode = http.StatusInternalServerError
 
-		return nil, loginRes
+		return loginRes, err
 	}
 
 	if userAccount == nil {
+		log.Logger().Warn().Msgf("Login attempt with non-existing user: %s", req.Username)
 		loginRes.success = false
-		loginRes.errorMessage = "No user account found!"
-		loginRes.statusCode = http.StatusForbidden
+		loginRes.errorMessage = "Invalid username or password!"
+		loginRes.statusCode = http.StatusUnauthorized
 
-		return nil, loginRes
+		return loginRes, nil
 	}
 
 	if userAccount.Locked {
@@ -134,7 +76,7 @@ func (svc *authService) authenticateUser(loginRequest *mgmt.AuthLoginRequest, us
 		loginRes.errorMessage = "User account has been locked! Contact system administrator."
 		loginRes.statusCode = http.StatusForbidden
 
-		return nil, loginRes
+		return loginRes, nil
 	}
 
 	currentPw, currentSalt, err := svc.store.Users().GetPasswordAndSalt(ctx, userAccount.Id)
@@ -143,49 +85,49 @@ func (svc *authService) authenticateUser(loginRequest *mgmt.AuthLoginRequest, us
 		loginRes.errorMessage = "Opps! Error occured when logging in!"
 		loginRes.statusCode = http.StatusInternalServerError
 
-		return nil, loginRes
+		return loginRes, err
 	}
 
-	matched := security.ComparePasswordAndHash(loginRequest.Password, currentSalt, currentPw)
+	matched := security.ComparePasswordAndHash(req.Password, currentSalt, currentPw)
 	if !matched {
-		err = svc.store.Users().RecordFailedAttempt(ctx, loginRequest.Username)
+		err = svc.store.Users().RecordFailedAttempt(ctx, req.Username)
 		if err != nil {
 			loginRes.success = false
 			loginRes.errorMessage = "Opps! Error occured when logging in!"
 			loginRes.statusCode = http.StatusInternalServerError
 
-			return nil, loginRes
+			return loginRes, err
 		}
-		if (userAccount.FailedAttempts + 1) > MaxFailedLoginAttempts {
-			err = svc.store.Users().LockAccount(ctx, loginRequest.Username, constants.ReasonLockedFailedLoginAttempts)
+		if (userAccount.FailedAttempts + 1) > constants.MaxFailedLoginAttempts {
+			err = svc.store.Users().LockAccount(ctx, req.Username, constants.ReasonLockedFailedLoginAttempts)
 			if err != nil {
 				loginRes.success = false
 				loginRes.errorMessage = "Opps! Error occured when logging in!"
 				loginRes.statusCode = http.StatusInternalServerError
 
-				return nil, loginRes
+				return loginRes, err
 			}
 
 			loginRes.success = false
 			loginRes.errorMessage = "User account has been locked! Contact system administrator."
 			loginRes.statusCode = http.StatusForbidden
 
-			return nil, loginRes
+			return loginRes, nil
 		}
 
 		loginRes.success = false
 		loginRes.errorMessage = "Invalid username or password!"
-		loginRes.statusCode = http.StatusForbidden
+		loginRes.statusCode = http.StatusUnauthorized
 
-		return nil, loginRes
+		return loginRes, nil
 	}
-	err = svc.store.Users().UnlockAccount(ctx, loginRequest.Username)
+	err = svc.store.Users().UnlockAccount(ctx, req.Username)
 	if err != nil {
 		loginRes.success = false
 		loginRes.errorMessage = "Opps! Error occured when logging in!"
 		loginRes.statusCode = http.StatusInternalServerError
 
-		return nil, loginRes
+		return loginRes, nil
 	}
 
 	roleName, err := svc.store.Users().GetRole(ctx, userAccount.Id)
@@ -194,95 +136,84 @@ func (svc *authService) authenticateUser(loginRequest *mgmt.AuthLoginRequest, us
 		loginRes.errorMessage = "Opps! Error occured when logging in!"
 		loginRes.statusCode = http.StatusInternalServerError
 
-		return nil, loginRes
+		return loginRes, err
 	}
 
-	//TODO: We comment scopes check during authentication as there are no use now
-	// authorizedScopes := svc.getAuthorizedScopes(loginRequest.Scopes, roleName)
-	// if len(authorizedScopes) == 0 && len(loginRequest.Scopes) != 0 {
-	// 	loginRes.success = false
-	// 	loginRes.errorMessage = "User is not authorized to access!"
-	// 	loginRes.statusCode = http.StatusForbidden
+	loginRes.userRole = roleName
 
-	// 	return nil, loginRes
-	// }
-
-	// slices.Sort(authorizedScopes) // sorting scopes to avoid scope hash mismatch
-	// scopeHash := utils.CombineAndCalculateSHA256Digest(authorizedScopes...)
-
-	authSession, err := svc.store.Auth().GetAuthSession(ctx, "not-used", userAccount.Id)
+	token, err := svc.jwtAuthenticator.Sign(map[string]any{
+		"sub":  req.Username,
+		"role": loginRes.userRole,
+	})
 	if err != nil {
+		log.Logger().Error().Err(err).Msgf("User(%s) login failed due to jwt token genaration errors", req.Username)
 		loginRes.success = false
-		loginRes.errorMessage = "Opps! Error occured when logging in!"
 		loginRes.statusCode = http.StatusInternalServerError
-
-		return nil, loginRes
+		loginRes.errorMessage = "Opps! Token gernation failed. Please try again!"
+		return loginRes, err
 	}
 
-	var issueNewSession bool
-
-	var sessionId string
-	if authSession != nil {
-		if time.Now().Add(time.Second * 5).Before(*authSession.ExpiresAt) {
-			sessionId = authSession.ID
-		} else {
-
-			// remove existing session
-			err = svc.store.Auth().RemoveAuthSession(ctx, authSession.ID)
-			if err != nil {
-				loginRes.success = false
-				loginRes.errorMessage = "Opps! Error occured when logging in!"
-				loginRes.statusCode = http.StatusInternalServerError
-
-				return nil, loginRes
-			}
-			issueNewSession = true
-		}
-	} else {
-		issueNewSession = true
-	}
-
-	if issueNewSession {
-
-		sessionId = uuid.New().String()
-		sessionIssuedAt := time.Now()
-		expiredAt := sessionIssuedAt.Add(time.Second * SessionExpiryInSeconds)
-
-		authSession = &models.OAuthSession{
-			ID:        sessionId,
-			UserID:    userAccount.Id,
-			ScopeHash: "not set",
-			IssuedAt:  sessionIssuedAt,
-			ExpiresAt: &expiredAt,
-			UserAgent: userAgent,
-			ClientIP:  clientIp,
-			GrantType: "password",
-		}
-
-		err = svc.store.Auth().PersistAuthSession(ctx, authSession)
-		if err != nil {
-			loginRes.success = false
-			loginRes.errorMessage = "Opps! Error occured when logging in!"
-			loginRes.statusCode = http.StatusInternalServerError
-
-			return nil, loginRes
-		}
-
-		err = svc.store.Auth().PersistAuthSessionScopeBinding(ctx, []string{}, authSession.ID)
-		if err != nil {
-			loginRes.success = false
-			loginRes.errorMessage = "Opps! Error occured when logging in!"
-			loginRes.statusCode = http.StatusInternalServerError
-
-			return nil, loginRes
-		}
+	// Write last accessed time to db
+	err = svc.store.Users().RecordLastAccessedTime(ctx, userAccount.Id, time.Now())
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Unable to record user login(%s) time due to errors", req.Username)
+		loginRes.statusCode = http.StatusInternalServerError
+		loginRes.errorMessage = "Opps! Failed to persist data. Please try again!"
+		loginRes.success = false
+		return loginRes, err
 	}
 
 	loginRes.success = true
-	loginRes.authorizedScopes = []string{}
-	loginRes.userRole = roleName
-	loginRes.sessionId = authSession.ID
-	loginRes.expiresAt = authSession.ExpiresAt
+	loginRes.jwtToken = token
+	loginRes.expiryInSeconds = config.GetAuthTokenConfig().Expiry
+	loginRes.userID = userAccount.Id
+	loginRes.username = userAccount.Username
 
-	return userAccount, loginRes
+	return loginRes, nil
+}
+
+func (svc *authService) revokeToken(reqCtx context.Context, signatureHash, userID string, expAt, issuedAt int64) error {
+
+	tx, err := svc.store.Begin(reqCtx)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Error occurred when starting transaction")
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	ctx := store.WithTxContext(reqCtx, tx)
+
+	// Check the database first
+	revokedToken, err := svc.store.Auth().GetRevokedToken(ctx, signatureHash)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Error occurred when checking revoked tokens")
+		return err
+	}
+
+	// if already revoked, no action required
+	if revokedToken != nil {
+		return nil
+	}
+
+	revokedToken = &models.RevokedToken{
+		SignatureHash: signatureHash,
+		UserID:        userID,
+		ExpiresAt:     expAt,
+		IssuedAt:      issuedAt,
+	}
+
+	err = svc.store.Auth().RecordTokenRevocation(ctx, revokedToken)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to revoke token due to errors")
+		return err
+	}
+
+	return nil
 }

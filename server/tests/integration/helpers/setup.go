@@ -104,3 +104,14 @@ func InitializeAdminUserAccount(s store.Store, adminConfig *config.AdminUserAcco
 
 	return nil
 }
+
+func SetAuthCookie(r *http.Request, token string) *http.Request {
+	r.AddCookie(&http.Cookie{
+		Name:     constants.AuthTokenCookie,
+		Value:    token,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   false,
+		MaxAge:   900,
+	})
+	return r
+}

@@ -127,7 +127,12 @@ func (n *NamespaceTestSuite) testCreateNamespaceSuccess(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			reqBody, _ := json.Marshal(tc.body)
-			resp, err := http.Post(n.testBaseURL+testdata.EndpointNamespaces, "application/json", bytes.NewReader(reqBody))
+			req, err := http.NewRequest(http.MethodPost, n.testBaseURL+testdata.EndpointNamespaces, bytes.NewReader(reqBody))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+			helpers.SetAuthCookie(req, n.seeder.AdminToken(t))
+
+			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			defer resp.Body.Close()
 			assert.Equal(t, tc.statusCode, resp.StatusCode)
@@ -216,7 +221,12 @@ func (n *NamespaceTestSuite) testCreateNamespaceValidation(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			reqBody, _ := json.Marshal(tc.body)
-			resp, err := http.Post(n.testBaseURL+testdata.EndpointNamespaces, "application/json", bytes.NewReader(reqBody))
+			req, err := http.NewRequest(http.MethodPost, n.testBaseURL+testdata.EndpointNamespaces, bytes.NewReader(reqBody))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+			helpers.SetAuthCookie(req, n.seeder.AdminToken(t))
+
+			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			defer resp.Body.Close()
 			assert.Equal(t, tc.statusCode, resp.StatusCode)
@@ -237,6 +247,7 @@ func (n *NamespaceTestSuite) testCreateNamespaceValidation(t *testing.T) {
 		})
 	}
 }
+
 func (n *NamespaceTestSuite) testCreateNamespaceConflicts(t *testing.T) {
 	// Prepare data
 	userID := n.seeder.ProvisionUser(t, "nsconflictuser1", "nsconflictsuser1@t.com", "Maintainer")
@@ -272,9 +283,15 @@ func (n *NamespaceTestSuite) testCreateNamespaceConflicts(t *testing.T) {
 			}
 
 			reqBody, _ := json.Marshal(body)
-			resp, err := http.Post(n.testBaseURL+testdata.EndpointNamespaces, "application/json", bytes.NewReader(reqBody))
+			req, err := http.NewRequest(http.MethodPost, n.testBaseURL+testdata.EndpointNamespaces, bytes.NewReader(reqBody))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+			helpers.SetAuthCookie(req, n.seeder.AdminToken(t))
+
+			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			require.NotNil(t, resp)
+			defer resp.Body.Close()
 
 			helpers.AssertStatusCode(t, resp, tc.statusCode)
 		})
@@ -321,7 +338,6 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 		statusCode int
 	}{
 		{
-
 			name:       "Invalid body",
 			body:       map[string]any{"test": "test"},
 			identifier: "nsgrant-fail",
@@ -332,7 +348,7 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 			body: map[string]any{
 				"user_id":       m2,
 				"access_level":  "Maintainer",
-				"resource_type": "Namespace", // correct value should be "namespace"
+				"resource_type": "Namespace",
 				"resource_id":   nsId,
 				"granted_by":    "admin",
 			},
@@ -466,7 +482,6 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			reqBody, err := json.Marshal(tc.body)
 			require.NoError(t, err)
-			require.NotEmpty(t, reqBody)
 
 			var url string
 			if tc.identifier == "" {
@@ -476,16 +491,17 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 			}
 			req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqBody))
 			require.NoError(t, err)
-			require.NotNil(t, req)
+			req.Header.Set("Content-Type", "application/json")
+			helpers.SetAuthCookie(req, n.seeder.AdminToken(t))
 
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
+			defer resp.Body.Close()
 
 			helpers.AssertStatusCode(t, resp, tc.statusCode)
 		})
 	}
 
-	// Test case : Trying to grant access to same resource to same user with different access levels
 	t.Run("Attempt to overwrite existing access", func(t *testing.T) {
 		reqBody1, err := json.Marshal(map[string]any{
 			"user_id":       d4,
@@ -494,19 +510,18 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 			"resource_id":   nsId,
 			"granted_by":    "admin"})
 		require.NoError(t, err)
-		require.NotEmpty(t, reqBody1)
 
 		req1, err := http.NewRequest(http.MethodPost, n.testBaseURL+fmt.Sprintf(testdata.EndpointNamespaceUsers, nsId),
 			bytes.NewReader(reqBody1))
 		require.NoError(t, err)
-		require.NotNil(t, req1)
+		req1.Header.Set("Content-Type", "application/json")
+		helpers.SetAuthCookie(req1, n.seeder.AdminToken(t))
 
 		resp1, err := http.DefaultClient.Do(req1)
 		require.NoError(t, err)
-		require.NotNil(t, resp1)
+		defer resp1.Body.Close()
 		require.Equal(t, http.StatusOK, resp1.StatusCode)
 
-		// attempting to overwrite access
 		reqBody2, err := json.Marshal(map[string]any{
 			"user_id":       d4,
 			"access_level":  "Developer",
@@ -515,19 +530,18 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 			"granted_by":    "admin",
 		})
 		require.NoError(t, err)
-		require.NotEmpty(t, reqBody2)
 
 		req2, err := http.NewRequest(http.MethodPost, n.testBaseURL+fmt.Sprintf(testdata.EndpointNamespaceUsers, nsId),
 			bytes.NewReader(reqBody2))
 		require.NoError(t, err)
-		require.NotNil(t, req2)
+		req2.Header.Set("Content-Type", "application/json")
+		helpers.SetAuthCookie(req2, n.seeder.AdminToken(t))
 
 		resp2, err := http.DefaultClient.Do(req2)
 		require.NoError(t, err)
-		require.NotNil(t, resp2)
+		defer resp2.Body.Close()
 		helpers.AssertStatusCode(t, resp2, http.StatusConflict)
 	})
-
 }
 
 func (n *NamespaceTestSuite) testNamespaceRevokeAccess(t *testing.T) {
@@ -596,7 +610,7 @@ func (n *NamespaceTestSuite) testNamespaceRevokeAccess(t *testing.T) {
 			name: "Invalid resource type",
 			body: map[string]any{
 				"user_id":       d2,
-				"resource_type": "Namespace", // corect "namespace"
+				"resource_type": "Namespace",
 				"resource_id":   nsId,
 			},
 			resourceId: nsId,
@@ -620,15 +634,15 @@ func (n *NamespaceTestSuite) testNamespaceRevokeAccess(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			reqBody, err := json.Marshal(tc.body)
 			require.NoError(t, err)
-			require.NotEmpty(t, reqBody)
 
 			url := n.testBaseURL + fmt.Sprintf(testdata.EndpointNamespaceUsers, tc.resourceId) + "/" + tc.userId
 			req, err := http.NewRequest(http.MethodDelete, url, bytes.NewReader(reqBody))
 			require.NoError(t, err)
-			require.NotNil(t, req)
+			helpers.SetAuthCookie(req, n.seeder.AdminToken(t))
 
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
+			defer resp.Body.Close()
 
 			helpers.AssertStatusCode(t, resp, tc.statusCode)
 		})
@@ -666,29 +680,35 @@ func (n *NamespaceTestSuite) testNamespaceGetAndExists(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		url := n.testBaseURL + fmt.Sprintf(testdata.EndpointNamespaceByID, tc.identifier)
+		t.Run(tc.name, func(t *testing.T) {
+			url := n.testBaseURL + fmt.Sprintf(testdata.EndpointNamespaceByID, tc.identifier)
 
-		resp1, err := http.Get(url)
-		require.NoError(t, err)
-		require.NotNil(t, resp1)
+			// Test GET
+			reqGet, err := http.NewRequest(http.MethodGet, url, nil)
+			require.NoError(t, err)
+			helpers.SetAuthCookie(reqGet, n.seeder.AdminToken(t))
 
-		helpers.AssertStatusCode(t, resp1, tc.statusCode)
+			resp1, err := http.DefaultClient.Do(reqGet)
+			require.NoError(t, err)
+			defer resp1.Body.Close()
+			helpers.AssertStatusCode(t, resp1, tc.statusCode)
 
-		req, err := http.NewRequest(http.MethodHead, url, nil)
-		require.NoError(t, err)
-		require.NotNil(t, req)
+			// Test HEAD
+			reqHead, err := http.NewRequest(http.MethodHead, url, nil)
+			require.NoError(t, err)
+			helpers.SetAuthCookie(reqHead, n.seeder.AdminToken(t))
 
-		resp2, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		require.NotNil(t, resp2)
-
-		helpers.AssertStatusCode(t, resp2, tc.statusCode)
+			resp2, err := http.DefaultClient.Do(reqHead)
+			require.NoError(t, err)
+			defer resp2.Body.Close()
+			helpers.AssertStatusCode(t, resp2, tc.statusCode)
+		})
 	}
 }
 
 func (n *NamespaceTestSuite) testUpdateNamespace(t *testing.T) {
 	// Prepare data
-	m := n.seeder.ProvisionUser(t, "nsupdate-maintainer1", "nsupdate-maintainer1@t.com", "Maintainer")
+	m := n.seeder.ProvisionUser(t, "nsupdate-maintainer1", "nsupdate-maintainer1@test.com", "Maintainer")
 	require.NotEmpty(t, m)
 	nsName := "nsupdate-1"
 	nsId := n.seeder.CreateNamespace(t, nsName, "", "Team", false, m)
@@ -759,7 +779,6 @@ func (n *NamespaceTestSuite) testUpdateNamespace(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-
 		t.Run(tc.name, func(t *testing.T) {
 			reqBody, err := json.Marshal(tc.body)
 			require.NoError(t, err)
@@ -770,20 +789,22 @@ func (n *NamespaceTestSuite) testUpdateNamespace(t *testing.T) {
 			req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(reqBody))
 			require.NoError(t, err)
 			require.NotNil(t, req)
+			req.Header.Set("Content-Type", "application/json")
+			helpers.SetAuthCookie(req, n.seeder.AdminToken(t))
 
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			require.NotNil(t, resp)
+			defer resp.Body.Close()
 
 			helpers.AssertStatusCode(t, resp, tc.statusCode)
 		})
-
 	}
 }
 
 func (n *NamespaceTestSuite) testDeleteNamespace(t *testing.T) {
 	// Prepare data
-	m := n.seeder.ProvisionUser(t, "nsdelete-maintainer1", "nsdelete-maintainer1@t.com", "Maintainer")
+	m := n.seeder.ProvisionUser(t, "nsdelete-maintainer1", "nsdelete-maintainer1@test.com", "Maintainer")
 	require.NotEmpty(t, m)
 
 	nsId := n.seeder.CreateNamespace(t, "nsDelete1", "", "Team", false, m)
@@ -821,10 +842,12 @@ func (n *NamespaceTestSuite) testDeleteNamespace(t *testing.T) {
 			req, err := http.NewRequest(http.MethodDelete, url, nil)
 			require.NoError(t, err)
 			require.NotNil(t, req)
+			helpers.SetAuthCookie(req, n.seeder.AdminToken(t))
 
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			require.NotNil(t, resp)
+			defer resp.Body.Close()
 
 			helpers.AssertStatusCode(t, resp, tc.statusCode)
 		})
@@ -833,7 +856,7 @@ func (n *NamespaceTestSuite) testDeleteNamespace(t *testing.T) {
 
 func (n *NamespaceTestSuite) testNamespaceStateChange(t *testing.T) {
 	// Prepare data
-	m := n.seeder.ProvisionUser(t, "nsstatechange-maintainer1", "nsstatechange-maintainer1@t.com",
+	m := n.seeder.ProvisionUser(t, "nsstatechange-maintainer1", "nsstatechange-maintainer1@test.com",
 		"Maintainer")
 	require.NotEmpty(t, m)
 
@@ -902,6 +925,7 @@ func (n *NamespaceTestSuite) testNamespaceStateChange(t *testing.T) {
 			req, err := http.NewRequest(http.MethodPatch, url, nil)
 			require.NoError(t, err)
 			require.NotNil(t, req)
+			helpers.SetAuthCookie(req, n.seeder.AdminToken(t))
 
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
@@ -997,6 +1021,7 @@ func (n *NamespaceTestSuite) testNamespaceVisibilityChange(t *testing.T) {
 
 			req, err := http.NewRequest(http.MethodPatch, url, nil)
 			require.NoError(t, err)
+			helpers.SetAuthCookie(req, n.seeder.AdminToken(t))
 
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
@@ -1052,9 +1077,6 @@ func (n *NamespaceTestSuite) testListNamespaces(t *testing.T) {
 	n.seeder.SetNamespaceDeprecated(t, n14)
 	n.seeder.SetNamespaceDisabled(t, n13)
 
-	// 2. with search term
-	// 3. with search term, isPublic
-	// 4. TODO with tag count /range filter
 	tcs := []struct {
 		name             string
 		queryParams      map[string]string
@@ -1070,7 +1092,7 @@ func (n *NamespaceTestSuite) testListNamespaces(t *testing.T) {
 			name:             "Without any filters",
 			queryParams:      map[string]string{},
 			statusCode:       http.StatusOK,
-			total:            -1, // for this we cannot predict, there may be other namespaces created by other tests
+			total:            -1,
 			countCurrentPage: -1,
 		},
 		{
@@ -1152,10 +1174,13 @@ func (n *NamespaceTestSuite) testListNamespaces(t *testing.T) {
 			}
 			reqURL += "?" + queryParams.Encode()
 
-			resp, err := http.Get(reqURL)
+			req, err := http.NewRequest(http.MethodGet, reqURL, nil)
+			require.NoError(t, err)
+			helpers.SetAuthCookie(req, n.seeder.AdminToken(t))
+
+			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			require.NotNil(t, resp)
-
 			defer resp.Body.Close()
 
 			var resBody map[string]any
@@ -1163,7 +1188,6 @@ func (n *NamespaceTestSuite) testListNamespaces(t *testing.T) {
 			require.NoError(t, err)
 
 			total := resBody["total"]
-			// We have to convert int to float64. By default Decoder converts number into float64
 			if tc.total != -1 {
 				require.Equal(t, float64(tc.total), total)
 			}
@@ -1190,8 +1214,7 @@ func (n *NamespaceTestSuite) testListNamespaces(t *testing.T) {
 				require.Equal(t, tc.countCurrentPage, len(namespaces))
 			}
 
-			if tc.total != -1 { // if total is unpredictable when using any filter We cannot predict
-				// elements order
+			if tc.total != -1 {
 				if tc.firstId != "" && len(resultIds) > 0 {
 					assert.Equal(t, tc.firstId, resultIds[0])
 				}
@@ -1343,14 +1366,17 @@ func (n *NamespaceTestSuite) testNamespaceUserAccessList(t *testing.T) {
 			reqURL := n.testBaseURL + fmt.Sprintf(testdata.EndpointNamespaceUsers, n1)
 			if len(tc.queryParams) > 0 {
 				qParams := url.Values{}
-
 				for k, v := range tc.queryParams {
 					qParams.Add(k, v)
 				}
 				reqURL += "?" + qParams.Encode()
 			}
 
-			resp, err := http.Get(reqURL)
+			req, err := http.NewRequest(http.MethodGet, reqURL, nil)
+			require.NoError(t, err)
+			helpers.SetAuthCookie(req, n.seeder.AdminToken(t))
+
+			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			defer resp.Body.Close()
 
@@ -1360,8 +1386,6 @@ func (n *NamespaceTestSuite) testNamespaceUserAccessList(t *testing.T) {
 			err = json.NewDecoder(resp.Body).Decode(&resBody)
 			require.NoError(t, err)
 
-			t.Log(resBody)
-
 			if tc.statusCode != http.StatusOK {
 				if tc.expectedErr != "" {
 					assert.Contains(t, resBody["error_message"].(string), tc.expectedErr)
@@ -1370,7 +1394,6 @@ func (n *NamespaceTestSuite) testNamespaceUserAccessList(t *testing.T) {
 			}
 
 			require.Equal(t, float64(tc.total), resBody["total"])
-
 			accessList, ok := resBody["accesses"].([]any)
 			require.True(t, ok)
 			assert.Equal(t, tc.countCurrentPage, len(accessList))
@@ -1381,10 +1404,7 @@ func (n *NamespaceTestSuite) testNamespaceUserAccessList(t *testing.T) {
 					m := entry.(map[string]any)
 					actualUserIds = append(actualUserIds, m["user_id"].(string))
 				}
-
-				if len(tc.expectedUserIds) != 0 {
-					assert.ElementsMatch(t, tc.expectedUserIds, actualUserIds)
-				}
+				assert.ElementsMatch(t, tc.expectedUserIds, actualUserIds)
 			}
 		})
 	}

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/ksankeerth/open-image-registry/types/models"
 )
@@ -44,4 +45,5 @@ type UserStore interface {
 
 	AreAccountsActive(ctx context.Context, userIds []string) (valid bool, err error)
 
+	RecordLastAccessedTime(ctx context.Context, userId string, t time.Time) error
 }

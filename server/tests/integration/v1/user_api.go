@@ -75,7 +75,14 @@ func (u *UserTestSuite) testCreateUserSuccess(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			b, _ := json.Marshal(tc.body)
-			resp, err := http.Post(u.testBaseURL+testdata.EndpointUsers, "application/json", bytes.NewReader(b))
+
+			// 1. Create User Request
+			req, err := http.NewRequest(http.MethodPost, u.testBaseURL+testdata.EndpointUsers, bytes.NewReader(b))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+			helpers.SetAuthCookie(req, u.seeder.AdminToken(t))
+
+			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			defer resp.Body.Close()
 
@@ -85,9 +92,16 @@ func (u *UserTestSuite) testCreateUserSuccess(t *testing.T) {
 			recoveryUUID := resp.Header.Get(testdata.HeaderAccountSetupUUID)
 			assert.NotEmpty(t, recoveryUUID)
 
-			// Verify via SetupInfo endpoint
-			verifyResp, err := http.Get(u.testBaseURL + fmt.Sprintf(testdata.EndpointAccountSetupInfo, recoveryUUID))
+			// 2. Setup Info Request (Public endpoint, but keeping pattern consistent)
+			verifyURL := u.testBaseURL + fmt.Sprintf(testdata.EndpointAccountSetupInfo, recoveryUUID)
+			verifyReq, err := http.NewRequest(http.MethodGet, verifyURL, nil)
 			require.NoError(t, err)
+			helpers.SetAuthCookie(verifyReq, u.seeder.AdminToken(t))
+
+			verifyResp, err := http.DefaultClient.Do(verifyReq)
+			require.NoError(t, err)
+			defer verifyResp.Body.Close()
+
 			assert.Equal(t, http.StatusOK, verifyResp.StatusCode)
 
 			var resMap map[string]any
@@ -117,8 +131,15 @@ func (u *UserTestSuite) testCreateUserValidationErrors(t *testing.T) {
 				json.NewEncoder(&buf).Encode(tc.body)
 			}
 
-			resp, err := http.Post(u.testBaseURL+testdata.EndpointUsers, "application/json", &buf)
+			req, err := http.NewRequest(http.MethodPost, u.testBaseURL+testdata.EndpointUsers, &buf)
 			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+			helpers.SetAuthCookie(req, u.seeder.AdminToken(t))
+
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		})
 	}
@@ -139,8 +160,16 @@ func (u *UserTestSuite) testCreateUserConflicts(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			b, _ := json.Marshal(tc.body)
-			resp, err := http.Post(u.testBaseURL+testdata.EndpointUsers, "application/json", bytes.NewReader(b))
+
+			req, err := http.NewRequest(http.MethodPost, u.testBaseURL+testdata.EndpointUsers, bytes.NewReader(b))
 			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+			helpers.SetAuthCookie(req, u.seeder.AdminToken(t))
+
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
 			assert.Equal(t, http.StatusConflict, resp.StatusCode)
 		})
 	}
@@ -158,14 +187,20 @@ func (u *UserTestSuite) testUpdateUserSuccess(t *testing.T) {
 	userURL := u.testBaseURL + fmt.Sprintf(testdata.EndpointUserByID, userID)
 	req, _ := http.NewRequest(http.MethodPut, userURL, bytes.NewReader(updateBody))
 	req.Header.Set("Content-Type", "application/json")
+	helpers.SetAuthCookie(req, u.seeder.AdminToken(t))
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
+	defer resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Verify
-	getResp, err := http.Get(userURL)
+	getReq, _ := http.NewRequest(http.MethodGet, userURL, nil)
+	helpers.SetAuthCookie(getReq, u.seeder.AdminToken(t))
+
+	getResp, err := http.DefaultClient.Do(getReq)
 	require.NoError(t, err)
+	defer getResp.Body.Close()
 	require.Equal(t, http.StatusOK, getResp.StatusCode)
 
 	var res map[string]any
@@ -186,8 +221,12 @@ func (u *UserTestSuite) testUpdateUserValidationErrors(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			req, _ := http.NewRequest(http.MethodPut, userURL, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			helpers.SetAuthCookie(req, u.seeder.AdminToken(t))
+
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
+			defer resp.Body.Close()
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		})
 	}
@@ -218,7 +257,12 @@ func (u *UserTestSuite) testCheckAvailabilitySuccess(t *testing.T) {
 				"username": tc.username,
 				"email":    tc.email,
 			})
-			resp, err := http.Post(u.testBaseURL+testdata.EndpointValidateUser, "application/json", bytes.NewReader(reqBody))
+
+			req, _ := http.NewRequest(http.MethodPost, u.testBaseURL+testdata.EndpointValidateUser, bytes.NewReader(reqBody))
+			req.Header.Set("Content-Type", "application/json")
+			helpers.SetAuthCookie(req, u.seeder.AdminToken(t))
+
+			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			defer resp.Body.Close()
 
@@ -246,13 +290,19 @@ func (u *UserTestSuite) testCheckAvailabilityValidation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			reqBody, err := json.Marshal(tc.body)
 			require.NoError(t, err)
-			resp, err := http.Post(u.testBaseURL+testdata.EndpointValidateUser, "application/json", bytes.NewReader(reqBody))
+
+			req, err := http.NewRequest(http.MethodPost, u.testBaseURL+testdata.EndpointValidateUser, bytes.NewReader(reqBody))
 			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+			helpers.SetAuthCookie(req, u.seeder.AdminToken(t))
+
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
 
 			helpers.AssertStatusCode(t, resp, tc.statusCode)
 		})
 	}
-
 }
 
 func (u *UserTestSuite) testValidatePassword(t *testing.T) {
@@ -269,8 +319,15 @@ func (u *UserTestSuite) testValidatePassword(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			reqBody, _ := json.Marshal(map[string]string{"password": tc.pass})
-			resp, err := http.Post(u.testBaseURL+testdata.EndpointValidatePassword, "application/json", bytes.NewReader(reqBody))
+
+			req, err := http.NewRequest(http.MethodPost, u.testBaseURL+testdata.EndpointValidatePassword, bytes.NewReader(reqBody))
 			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+			helpers.SetAuthCookie(req, u.seeder.AdminToken(t))
+
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
 			helpers.AssertStatusCode(t, resp, http.StatusOK)
 
 			var res map[string]any
@@ -287,7 +344,6 @@ func (u *UserTestSuite) testAccountSetupFlow(t *testing.T) {
 	// Prepare data
 	u1, r1 := u.seeder.CreateUser(t, "accountsetup01", "accountsetup01@t.com", "Guest")
 	require.NotEmpty(t, r1)
-	// r1 is now "Invalid" for setup because the reason is ForgotPassword, not AccountSetup
 	u.seeder.SetAccountRecoveryReason(t, r1, constants.ReasonPasswordRecoveryForgotPassowrd)
 
 	u2, r2 := u.seeder.CreateUser(t, "accountsetup02", "accountsetup02@t.com", "Maintainer")
@@ -349,7 +405,11 @@ func (u *UserTestSuite) testAccountSetupFlow(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// 1. GET Account Info
 			infoURL := u.testBaseURL + fmt.Sprintf(testdata.EndpointAccountSetupInfo, tc.recoveryID)
-			infoResp, err := http.Get(infoURL)
+			infoReq, err := http.NewRequest(http.MethodGet, infoURL, nil)
+			require.NoError(t, err)
+			helpers.SetAuthCookie(infoReq, u.seeder.AdminToken(t))
+
+			infoResp, err := http.DefaultClient.Do(infoReq)
 			require.NoError(t, err)
 			defer infoResp.Body.Close()
 
@@ -378,6 +438,7 @@ func (u *UserTestSuite) testAccountSetupFlow(t *testing.T) {
 			setupReq, err := http.NewRequest(http.MethodPost, completeURL, bytes.NewReader(setupBody))
 			require.NoError(t, err)
 			setupReq.Header.Set("Content-Type", "application/json")
+			helpers.SetAuthCookie(setupReq, u.seeder.AdminToken(t))
 
 			setupResp, err := http.DefaultClient.Do(setupReq)
 			require.NoError(t, err)

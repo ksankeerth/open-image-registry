@@ -13,6 +13,7 @@ import (
 	"github.com/ksankeerth/open-image-registry/access/resource"
 	"github.com/ksankeerth/open-image-registry/client/email"
 	"github.com/ksankeerth/open-image-registry/config"
+	"github.com/ksankeerth/open-image-registry/lib"
 	"github.com/ksankeerth/open-image-registry/rest"
 	"github.com/ksankeerth/open-image-registry/storage"
 	"github.com/ksankeerth/open-image-registry/store"
@@ -29,6 +30,7 @@ var (
 	testBaseURL     string
 	testEmailClient *email.EmailClient
 	tempDir         string
+	jwtProvider     lib.JWTProvider
 )
 
 func TestMain(m *testing.M) {
@@ -66,7 +68,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestIntegrationV1(t *testing.T) {
-	seeder := seeder.NewTestDataSeeder(testBaseURL, testStore)
+	seeder := seeder.NewTestDataSeeder(testBaseURL, testStore, jwtProvider)
 
 	suites := []APITestSuite{
 		v1.NewUserTestSuite(seeder, testBaseURL),
@@ -149,12 +151,17 @@ func setupTestEnvironment() error {
 	// Creating Resource Access Manager
 	accessManager := resource.NewManager(store)
 
+	authConfig := appConfig.Security.AuthToken
+	jwtAuth := lib.NewOAuthEC256JWTAuthenticator(authConfig.GetPrivateKey(), authConfig.GetPublicKey(), authConfig.Issuer,
+		time.Duration(authConfig.Expiry)*time.Second)
+
+	jwtProvider = jwtAuth
+
 	log.Println("├─ Creating HTTP server...")
-	appRouter := rest.AppRouter(&appConfig.WebApp, store, accessManager, testEmailClient)
+	appRouter := rest.AppRouter(&appConfig.WebApp, store, jwtAuth, accessManager, testEmailClient)
 
 	testServer = httptest.NewServer(appRouter)
 	testBaseURL = testServer.URL
-
 
 	if err := helpers.WaitForServer(testBaseURL, 10*time.Second); err != nil {
 		return fmt.Errorf("server failed to start: %w", err)
@@ -171,7 +178,6 @@ func teardownTestEnvironment() error {
 		if testServer != nil {
 			testServer.Close()
 		}
-
 	}
 
 	if testConfig == nil {

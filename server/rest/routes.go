@@ -15,12 +15,15 @@ import (
 	"github.com/ksankeerth/open-image-registry/auth"
 	"github.com/ksankeerth/open-image-registry/client/email"
 	"github.com/ksankeerth/open-image-registry/config"
+	"github.com/ksankeerth/open-image-registry/lib"
 	"github.com/ksankeerth/open-image-registry/log"
+	"github.com/ksankeerth/open-image-registry/middleware"
 	"github.com/ksankeerth/open-image-registry/store"
 	"github.com/ksankeerth/open-image-registry/user"
 )
 
-func AppRouter(webappConfig *config.WebAppConfig, store store.Store, accessManager *resource.Manager, ec *email.EmailClient) *chi.Mux {
+func AppRouter(webappConfig *config.WebAppConfig, store store.Store, jwtProvider lib.JWTProvider,
+	accessManager *resource.Manager, ec *email.EmailClient) *chi.Mux {
 	router := chi.NewRouter()
 
 	// Middleware setup
@@ -39,17 +42,19 @@ func AppRouter(webappConfig *config.WebAppConfig, store store.Store, accessManag
 		MessageFieldName: "message",
 	})))
 
-	router.Use(EnforceJSON)
+	router.Use(middleware.EnforceJSON)
 
-	authHandler := auth.NewAuthAPIHandler(store)
+	authMiddleware := middleware.NewAuthenticator(store, jwtProvider)
+
+	authHandler := auth.NewAuthAPIHandler(store, jwtProvider, authMiddleware)
 	userHandler := user.NewUserAPIHandler(store, ec)
 	registryAccessHandler := access.NewRegistryAccessHandler(store, accessManager)
 
 	// API routes
 	router.Route("/api/v1", func(r chi.Router) {
-		r.Mount("/users", userHandler.Routes())
+		r.Mount("/users", authMiddleware.Authenticate(userHandler.Routes()))
 		r.Mount("/auth", authHandler.Routes())
-		r.Mount("/access", registryAccessHandler.Routes())
+		r.Mount("/access", authMiddleware.Authenticate(registryAccessHandler.Routes()))
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 			//TODO: develop health check endpoint later
 			w.WriteHeader(http.StatusOK)

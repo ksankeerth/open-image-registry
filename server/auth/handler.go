@@ -6,25 +6,32 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/ksankeerth/open-image-registry/config"
+	"github.com/ksankeerth/open-image-registry/constants"
 	"github.com/ksankeerth/open-image-registry/errors/httperrors"
+	"github.com/ksankeerth/open-image-registry/lib"
 	"github.com/ksankeerth/open-image-registry/log"
+	"github.com/ksankeerth/open-image-registry/middleware"
 	"github.com/ksankeerth/open-image-registry/store"
 	"github.com/ksankeerth/open-image-registry/types/api/v1alpha/mgmt"
 	"github.com/ksankeerth/open-image-registry/user"
 )
 
 type AuthAPIHandler struct {
-	svc         *authService
-	userAdapter *user.UserAdapter
+	svc           *authService
+	userAdapter   *user.UserAdapter
+	authenticator *middleware.Authenticator
 }
 
 // NewAuthAPIHandler creates a new auth API handler
-func NewAuthAPIHandler(store store.Store) *AuthAPIHandler {
+func NewAuthAPIHandler(store store.Store, jwtProvider lib.JWTProvider,
+	authenticator *middleware.Authenticator) *AuthAPIHandler {
 	return &AuthAPIHandler{
 		svc: &authService{
-			store:        store,
-			scopeRoleMap: map[string][]string{},
+			store:            store,
+			jwtAuthenticator: jwtProvider,
 		},
+		authenticator: authenticator,
 	}
 }
 
@@ -49,60 +56,129 @@ func (h *AuthAPIHandler) Login(w http.ResponseWriter, r *http.Request) {
 		clientIp = xForwardedFor
 	}
 
-	userAccount, loginResult := h.svc.authenticateUser(&loginRequest, userAgent, clientIp)
+	loginResult, err := h.svc.authenticateUser(r.Context(), &loginRequest, userAgent, clientIp)
+	authLoginResponse := mgmt.AuthLoginResponse{}
 
-	authLoginResponse := mgmt.AuthLoginResponse{
-		Success:          loginResult.success,
-		ErrorMessage:     loginResult.errorMessage,
-		SessionId:        loginResult.sessionId,
-		AuthorizedScopes: loginResult.authorizedScopes,
-		ExpiresAt:        *loginResult.expiresAt,
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Login failed due to errors")
+		httperrors.SendError(w, loginResult.statusCode, loginResult.errorMessage)
+		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
 	if !loginResult.success {
-		w.WriteHeader(loginResult.statusCode)
-	} else {
-		h.setAuthCookie(w, loginResult.sessionId, 900)
-		w.WriteHeader(http.StatusOK)
+		httperrors.SendError(w, loginResult.statusCode, loginResult.errorMessage)
+		return
 	}
-	if userAccount != nil {
-		authLoginResponse.User = mgmt.UserProfileInfo{
-			UserId:   userAccount.Id,
-			Username: userAccount.Username,
-			Role:     loginResult.userRole,
-		}
+
+	h.setAuthCookie(w, loginResult.jwtToken, loginResult.expiryInSeconds)
+	w.WriteHeader(http.StatusOK)
+
+	authLoginResponse.User = mgmt.UserProfileInfo{
+		UserId:   loginResult.userID,
+		Username: loginResult.username,
+		Role:     loginResult.userRole,
 	}
+
 	err = json.NewEncoder(w).Encode(authLoginResponse)
 	if err != nil {
-		log.Logger().Error().Err(err).Msg("Error occurred when writing json response to login request")
+		log.Logger().Error().Err(err).Msg("Error occurred when writing login response to client")
 	}
+}
+
+func (h *AuthAPIHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	signatureHash := r.Context().Value(constants.ContextSignatureHash)
+	if signatureHash == nil {
+		log.Logger().Error().Msg("signature hash is not found in request context")
+		httperrors.InternalError(w, 500, "Invalid value for signature hash")
+		return
+	}
+
+	signatureHashVal, ok := signatureHash.(string)
+	if !ok {
+		log.Logger().Error().Msg("Signature hash is not found in request context")
+		httperrors.InternalError(w, 500, "Invalid value for signature hash")
+		return
+	}
+	if signatureHashVal == "" {
+		log.Logger().Error().Msg("Signature hash is empty in request context")
+		httperrors.InternalError(w, 500, "Signature hash is not set properly")
+		return
+	}
+
+	expAt := r.Context().Value(constants.ContextExpAt)
+	if expAt == nil {
+		log.Logger().Error().Msg("Token expiry is not in request context")
+		httperrors.InternalError(w, 500, "Invalid value for expiry")
+		return
+	}
+	expVal, ok := expAt.(int64)
+	if !ok {
+		log.Logger().Error().Msgf("Invalid value set for token expiry: %T", expAt)
+		httperrors.InternalError(w, 500, "Invalid value for expiry")
+		return
+	}
+
+	iat := r.Context().Value(constants.ContextIssuedAt)
+	if iat == nil {
+		log.Logger().Error().Msg("token issued time is not set in request context")
+		httperrors.InternalError(w, 500, "Invalid value for iat")
+		return
+	}
+	iatVal, ok := iat.(int64)
+	if !ok {
+		log.Logger().Error().Msgf("Invalid value set for token expiry: %T", expAt)
+		httperrors.InternalError(w, 500, "Invalid value for iat")
+		return
+	}
+
+	userId := r.Context().Value(constants.ContextUserID)
+	if userId == nil {
+		log.Logger().Error().Msg("user id is not set in request context")
+		httperrors.InternalError(w, 500, "Invalid value for userid")
+		return
+	}
+	userIdStr, ok := userId.(string)
+	if !ok {
+		log.Logger().Error().Msg("invalid value set for userId in request context")
+		httperrors.InternalError(w, 500, "Invalid value for sub")
+		return
+	}
+
+	err := h.svc.revokeToken(r.Context(), signatureHashVal, userIdStr, expVal, iatVal)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Request failed due to errors")
+		httperrors.InternalError(w, 500, "Request failed due to errors")
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *AuthAPIHandler) Routes() chi.Router {
+
 	router := chi.NewRouter()
 	router.Route("/", func(r chi.Router) {
 		r.Post("/login", h.Login)
+		r.With(h.authenticator.Authenticate).Post("/logout", h.Logout)
 	})
+
 	return router
 }
 
-// writeJSON writes JSON response
-func (h *AuthAPIHandler) writeJSON(w http.ResponseWriter, statusCode int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(data)
-}
-
-func (h *AuthAPIHandler) setAuthCookie(w http.ResponseWriter, session_id string, maxAge int) {
+func (h *AuthAPIHandler) setAuthCookie(w http.ResponseWriter, token string, expiryInSeconds int) {
 	cookie := &http.Cookie{
-		Name:     "auth_session",
-		Value:    session_id,
+		Name:     constants.AuthTokenCookie,
+		Value:    token,
 		Path:     "/",
-		MaxAge:   maxAge,
+		MaxAge:   expiryInSeconds,
 		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
-		SameSite: http.SameSiteNoneMode,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
 	}
+
+	if config.GetDevelopmentConfig().Enable {
+		cookie.SameSite = http.SameSiteLaxMode
+		cookie.Secure = false
+	}
+
 	http.SetCookie(w, cookie)
 }

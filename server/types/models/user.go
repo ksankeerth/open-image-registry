@@ -13,6 +13,7 @@ type UserAccount struct {
 	CreatedAt      time.Time
 	UpdatedAt      *time.Time
 	LockedAt       *time.Time
+	LastAccessedAt *time.Time
 }
 
 type AccountRecovery struct {

@@ -100,7 +100,8 @@ const (
 // Endpoints
 const (
 	// Authentication
-	EndpointLogin = "/api/v1/auth/login"
+	EndpointLogin  = "/api/v1/auth/login"
+	EndpointLogout = "/api/v1/auth/logout"
 
 	// User Management (Base)
 	EndpointUsers       = "/api/v1/users"

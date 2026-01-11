@@ -1,12 +1,16 @@
 package config
 
 import (
+	"crypto/ecdsa"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/ksankeerth/open-image-registry/constants"
+	"github.com/ksankeerth/open-image-registry/log"
 	"github.com/ksankeerth/open-image-registry/utils"
 	"gopkg.in/yaml.v3"
 )
@@ -25,6 +29,143 @@ type AppConfig struct {
 	Audit            AuditEventsConfig      `yaml:"audit"`
 	Development      DevelopmentConfig      `yaml:"development"`
 	Testing          TestingConfig          `yaml:"testing"`
+	Security         SecurityConfig         `yaml:"security"`
+}
+
+type MgmtServerConfig struct {
+	Hostname string `yaml:"hostname"`
+	Port     uint   `yaml:"port"`
+}
+
+type ImageRegistryConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Hostname string `yaml:"hostname"`
+	Port     uint   `yaml:"port"`
+	// if this is true, it allows developers to create namespace on docker push
+	CreateNamespaceOnPush bool `yaml:"create_namespace_on_push"`
+	// if this is true, it allows developers to create repository on docker push
+	CreateRepositoryOnPush bool `yaml:"create_repository_on_push"`
+}
+
+type UpstreamRegistryConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+type AdminUserAccountConfig struct {
+	Username      string `yaml:"username"`
+	Password      string `yaml:"password"`
+	Email         string `yaml:"email"`
+	CreateAccount bool   `yaml:"create_account"`
+}
+
+type DatabaseConfig struct {
+	Type        string `yaml:"type"`
+	Path        string `yaml:"path"`
+	AutoCreate  bool   `yaml:"auto_create"`
+	ScriptsPath string `yaml:"scripts_path"`
+}
+
+type StorageConfig struct {
+	Type       string `yaml:"type"`
+	Path       string `yaml:"path"`
+	AutoCreate bool   `yaml:"auto_create"`
+}
+
+type NotificationConfig struct {
+	Email EmailSenderConfig `yaml:"email"`
+}
+
+type EmailSenderConfig struct {
+	Enabled      bool   `yaml:"enabled"`
+	SmtpHost     string `yaml:"smtp_host"`
+	SmtpPort     uint   `yaml:"smtp_port"`
+	SmtpUser     string `yaml:"smtp_user"`
+	SmtpPassword string `yaml:"smtp_password"`
+	FromAddress  string `yaml:"from_address"`
+}
+
+type WebAppConfig struct {
+	EnableUI bool   `yaml:"enable_ui"`
+	DistPath string `yaml:"dist_path"`
+}
+
+type DevelopmentConfig struct {
+	Enable    bool `yaml:"enable"`
+	MockEmail bool `yaml:"mock_email"`
+}
+
+type TestingConfig struct {
+	AllowDeleteAll bool `yaml:"allow_delete_all"`
+}
+
+type AuditEventsConfig struct {
+	Enable               bool          `yaml:"enable"`
+	VerifyBucketsOnStart bool          `yaml:"verify_buckets_on_start"`
+	RecordsPerBucket     uint64        `yaml:"records_per_bucket"`
+	AvailableBucketCount uint16        `yaml:"available_bucket_count"`
+	BatchInsertSize      uint32        `yaml:"batch_insert_size"`
+	BatchInsertWaitTime  time.Duration `yaml:"batch_insert_wait_time"`
+	// TODO: for now, by default we persist audit events in database and logs.
+	// later consider supporting multiple types
+}
+
+type SecurityConfig struct {
+	AuthToken AuthTokenConfig `yaml:"auth_token"`
+}
+
+type AuthTokenConfig struct {
+	Algorithm      string `yaml:"algorithm"`
+	PrivateKeyPath string `yaml:"private_key_path"`
+	PublicKeyPath  string `yaml:"public_key_path"`
+	Expiry         int    `yaml:"expiry_seconds"`
+	Issuer         string `yaml:"issuer"`
+	privateKey     *ecdsa.PrivateKey
+	publicKey      *ecdsa.PublicKey
+}
+
+func (a *AuthTokenConfig) GetPrivateKey() *ecdsa.PrivateKey {
+	return a.privateKey
+}
+
+func (a *AuthTokenConfig) GetPublicKey() *ecdsa.PublicKey {
+	return a.publicKey
+}
+
+func GetDevelopmentConfig() DevelopmentConfig {
+	if appConfiguration == nil {
+		return DevelopmentConfig{}
+	}
+	return appConfiguration.Development
+}
+
+func GetTestingConfig() TestingConfig {
+	if appConfiguration == nil {
+		return TestingConfig{}
+	}
+	return appConfiguration.Testing
+}
+
+func GetImageRegistryConfig() ImageRegistryConfig {
+	if appConfiguration == nil {
+		return ImageRegistryConfig{}
+	}
+
+	return appConfiguration.ImageRegistry
+}
+
+func GetDefaultEmailSenderConfig() *EmailSenderConfig {
+	return &EmailSenderConfig{
+		Enabled:      false,
+		SmtpHost:     "localhost",
+		SmtpPort:     25,
+		SmtpUser:     "",
+		SmtpPassword: "",
+		FromAddress:  "noreply@test.com",
+	}
+}
+
+func GetAuthTokenConfig() *AuthTokenConfig {
+	return &appConfiguration.Security.AuthToken
 }
 
 func LoadConfig(configPath, appHome string) (*AppConfig, error) {
@@ -64,6 +205,8 @@ func resolveAppHomeVars(cfg *AppConfig, appHome string) {
 	cfg.Database.ScriptsPath = replace(cfg.Database.ScriptsPath)
 	cfg.Storage.Path = replace(cfg.Storage.Path)
 	cfg.WebApp.DistPath = replace(cfg.WebApp.DistPath)
+	cfg.Security.AuthToken.PrivateKeyPath = replace(cfg.Security.AuthToken.PrivateKeyPath)
+	cfg.Security.AuthToken.PublicKeyPath = replace(cfg.Security.AuthToken.PublicKeyPath)
 }
 
 func validateConfig(cfg *AppConfig) (bool, string) {
@@ -160,6 +303,32 @@ func validateConfig(cfg *AppConfig) (bool, string) {
 			return false, "notification.email.from_address cannot be empty when email.enabled = true"
 		}
 	}
+
+	// Security - Auth Token
+	if cfg.Security.AuthToken.Issuer == "" {
+		return false, "Auth token issuer must be set for security.auth_token.issuer"
+	}
+	if cfg.Security.AuthToken.Algorithm != constants.TokenSigningAlgoES256 {
+		return false, "Unsupported algorithm for security.auth_token.algorithm"
+	}
+
+	privKey, pubKey, err := validateES256KeyPair(cfg.Security.AuthToken.PrivateKeyPath, cfg.Security.AuthToken.PublicKeyPath)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Error occurred when validating auth_token key pairs")
+		if privKey != nil {
+			return false, fmt.Sprintf("Invalid public key for security.auth_token.public_key_path : %s", err.Error())
+		}
+		return false, fmt.Sprintf("Invalid private key for security.auth_token.private_key_path : %s", err.Error())
+	}
+
+	// It is only allowed to use P-256. Reason is to avoid P-521 since is CPU heavy algo.
+	if privKey.Curve.Params().Name != "P-256" {
+		return false, fmt.Sprintf("Unsupported curve: %s", privKey.Curve.Params().Name)
+	}
+
+	cfg.Security.AuthToken.privateKey = privKey
+	cfg.Security.AuthToken.publicKey = pubKey
+
 	return true, ""
 }
 
@@ -207,112 +376,44 @@ func defaultConfig(severHome string) *AppConfig {
 	}
 }
 
-type MgmtServerConfig struct {
-	Hostname string `yaml:"hostname"`
-	Port     uint   `yaml:"port"`
-}
-
-type ImageRegistryConfig struct {
-	Enabled  bool   `yaml:"enabled"`
-	Hostname string `yaml:"hostname"`
-	Port     uint   `yaml:"port"`
-	// if this is true, it allows developers to create namespace on docker push
-	CreateNamespaceOnPush bool `yaml:"create_namespace_on_push"`
-	// if this is true, it allows developers to create repository on docker push
-	CreateRepositoryOnPush bool `yaml:"create_repository_on_push"`
-}
-
-type UpstreamRegistryConfig struct {
-	Enabled bool `yaml:"enabled"`
-}
-
-type AdminUserAccountConfig struct {
-	Username      string `yaml:"username"`
-	Password      string `yaml:"password"`
-	Email         string `yaml:"email"`
-	CreateAccount bool   `yaml:"create_account"`
-}
-
-type DatabaseConfig struct {
-	Type        string `yaml:"type"`
-	Path        string `yaml:"path"`
-	AutoCreate  bool   `yaml:"auto_create"`
-	ScriptsPath string `yaml:"scripts_path"`
-}
-
-type StorageConfig struct {
-	Type       string `yaml:"type"`
-	Path       string `yaml:"path"`
-	AutoCreate bool   `yaml:"auto_create"`
-}
-
-type NotificationConfig struct {
-	Email EmailSenderConfig `yaml:"email"`
-}
-
-type EmailSenderConfig struct {
-	Enabled      bool   `yaml:"enabled"`
-	SmtpHost     string `yaml:"smtp_host"`
-	SmtpPort     uint   `yaml:"smtp_port"`
-	SmtpUser     string `yaml:"smtp_user"`
-	SmtpPassword string `yaml:"smtp_password"`
-	FromAddress  string `yaml:"from_address"`
-}
-
-type WebAppConfig struct {
-	EnableUI bool   `yaml:"enable_ui"`
-	DistPath string `yaml:"dist_path"`
-}
-
-type DevelopmentConfig struct {
-	Enable    bool `yaml:"enable"`
-	MockEmail bool `yaml:"mock_email"`
-}
-
-type TestingConfig struct {
-	AllowDeleteAll bool `yaml:"allow_delete_all"`
-}
-
-type AuditEventsConfig struct {
-	Enable               bool          `yaml:"enable"`
-	VerifyBucketsOnStart bool          `yaml:"verify_buckets_on_start"`
-	RecordsPerBucket     uint64        `yaml:"records_per_bucket"`
-	AvailableBucketCount uint16        `yaml:"available_bucket_count"`
-	BatchInsertSize      uint32        `yaml:"batch_insert_size"`
-	BatchInsertWaitTime  time.Duration `yaml:"batch_insert_wait_time"`
-	// TODO: for now, by default we persist audit events in database and logs.
-	// later consider supporting multiple types
-}
-
-func GetDevelopmentConfig() DevelopmentConfig {
-	if appConfiguration == nil {
-		return DevelopmentConfig{}
-	}
-	return appConfiguration.Development
-}
-
-func GetTestingConfig() TestingConfig {
-	if appConfiguration == nil {
-		return TestingConfig{}
-	}
-	return appConfiguration.Testing
-}
-
-func GetImageRegistryConfig() ImageRegistryConfig {
-	if appConfiguration == nil {
-		return ImageRegistryConfig{}
+func validateES256KeyPair(privPath, pubPath string) (*ecdsa.PrivateKey, *ecdsa.PublicKey, error) {
+	privBytes, err := os.ReadFile(privPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("private key file is missing or unreadable: %w", err)
 	}
 
-	return appConfiguration.ImageRegistry
-}
-
-func GetDefaultEmailSenderConfig() *EmailSenderConfig {
-	return &EmailSenderConfig{
-		Enabled:      false,
-		SmtpHost:     "localhost",
-		SmtpPort:     25,
-		SmtpUser:     "",
-		SmtpPassword: "",
-		FromAddress:  "noreply@test.com",
+	block, _ := pem.Decode(privBytes)
+	if block == nil || block.Type != "EC PRIVATE KEY" {
+		return nil, nil, fmt.Errorf("invalid private key format: expected EC PRIVATE KEY PEM block")
 	}
+
+	privKey, err := x509.ParseECPrivateKey(block.Bytes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse ECDSA private key: %w", err)
+	}
+
+	pubBytes, err := os.ReadFile(pubPath)
+	if err != nil {
+		return privKey, nil, fmt.Errorf("public key file is missing or unreadable: %w", err)
+	}
+
+	pubBlock, _ := pem.Decode(pubBytes)
+	if pubBlock == nil || pubBlock.Type != "PUBLIC KEY" {
+		return privKey, nil, fmt.Errorf("invalid public key format: expected PUBLIC KEY PEM block")
+	}
+
+	pubKeyInterface, err := x509.ParsePKIXPublicKey(pubBlock.Bytes)
+	if err != nil {
+		return privKey, nil, fmt.Errorf("failed to parse public key: %w", err)
+	}
+
+	pubkey, ok := pubKeyInterface.(*ecdsa.PublicKey)
+	if !ok {
+		return privKey, nil, fmt.Errorf("public key is not an ECDSA key")
+	}
+
+	if privKey.PublicKey.X.Cmp(pubkey.X) != 0 || privKey.PublicKey.Y.Cmp(pubkey.Y) != 0 {
+		return nil, nil, fmt.Errorf("config error: public key does not match the private key")
+	}
+	return privKey, pubkey, nil
 }

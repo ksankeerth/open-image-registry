@@ -63,3 +63,7 @@ func NotFound(w http.ResponseWriter, code int, msg string) {
 func NotAllowed(w http.ResponseWriter, code int, msg string) {
 	writeError(w, HTTPError{HTTPStatus: http.StatusForbidden, Code: code, Message: msg})
 }
+
+func Unauthorized(w http.ResponseWriter, code int, msg string) {
+	writeError(w, HTTPError{HTTPStatus: http.StatusUnauthorized, Code: code, Message: msg})
+}

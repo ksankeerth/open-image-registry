@@ -9,3 +9,8 @@ const (
 	DefaultAuditBatchWaitTime = time.Minute * 2
 	DefaultAuditSqliteBuckets = 10
 )
+
+// security
+const (
+	TokenSigningAlgoES256 = "ES256"
+)

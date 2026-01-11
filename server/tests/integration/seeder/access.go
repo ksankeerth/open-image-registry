@@ -7,12 +7,12 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/ksankeerth/open-image-registry/tests/integration/helpers"
 	"github.com/ksankeerth/open-image-registry/tests/testdata"
 	"github.com/stretchr/testify/require"
 )
 
 // GrantAccess seeds an access record for a specific resource.
-// It uses the EndpointNamespaceUsers or a generic access endpoint depending on your API design.
 func (s *TestDataSeeder) GrantAccess(t *testing.T, resourceID, resourceType, userID, accessLevel string) {
 	t.Helper()
 
@@ -29,7 +29,17 @@ func (s *TestDataSeeder) GrantAccess(t *testing.T, resourceID, resourceType, use
 
 	url := fmt.Sprintf("%s%s", s.baseURL, fmt.Sprintf(testdata.EndpointNamespaceUsers, resourceID))
 
-	resp, err := http.Post(url, "application/json", bytes.NewReader(reqBody))
+	// 1. Create the request object manually instead of using http.Post
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqBody))
+	require.NoError(t, err, "failed to create grant access request")
+	req.Header.Set("Content-Type", "application/json")
+
+	// 2. Generate the admin token and attach the cookie using your helpers
+	token := s.AdminToken(t)
+	helpers.SetAuthCookie(req, token)
+
+	// 3. Perform the request using the default HTTP client
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err, "failed to send grant access request")
 	defer resp.Body.Close()
 

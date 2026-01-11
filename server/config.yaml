@@ -44,3 +44,12 @@ webapp:
 development:
   enable: true
   mock_email: true # Instead of sending email, print the link/uuid in logs
+
+security:
+# Management APIs are protected by auth_token
+  auth_token:
+    issuer: "open-image-registry"
+    algorithm: "ES256"
+    private_key_path: "${app_home}/server/certs/jwt_es256_private.pem"
+    public_key_path: "${app_home}/server/certs/jwt_es256_public.pem"
+    expiry_seconds: 900

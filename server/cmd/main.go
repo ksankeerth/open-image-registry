@@ -16,6 +16,7 @@ import (
 	"github.com/ksankeerth/open-image-registry/client/email"
 	"github.com/ksankeerth/open-image-registry/config"
 	"github.com/ksankeerth/open-image-registry/constants"
+	"github.com/ksankeerth/open-image-registry/lib"
 	"github.com/ksankeerth/open-image-registry/listeners"
 	"github.com/ksankeerth/open-image-registry/log"
 	"github.com/ksankeerth/open-image-registry/registry"
@@ -116,8 +117,13 @@ func main() {
 	// ------------- create instance of resource access manager ----------------
 	accessManager := resource.NewManager(store)
 
+	// -------------- create jwt provider --------------------------------------
+	authConfig := appConfig.Security.AuthToken
+	jwtAuth := lib.NewOAuthEC256JWTAuthenticator(authConfig.GetPrivateKey(), authConfig.GetPublicKey(), authConfig.Issuer,
+		time.Duration(authConfig.Expiry)*time.Second)
+
 	// ------------ start serving ManagementAPIs and UI -----------------------
-	appRouter := rest.AppRouter(&appConfig.WebApp, store, accessManager, emailClient)
+	appRouter := rest.AppRouter(&appConfig.WebApp, store, jwtAuth, accessManager, emailClient)
 
 	address := fmt.Sprintf("%s:%d", appConfig.Server.Hostname, appConfig.Server.Port)
 

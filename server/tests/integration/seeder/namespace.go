@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/ksankeerth/open-image-registry/tests/integration/helpers"
 	"github.com/ksankeerth/open-image-registry/tests/testdata"
 	"github.com/stretchr/testify/require"
 )
@@ -37,9 +38,22 @@ func (s *TestDataSeeder) CreateNamespace(t *testing.T, name, description, purpos
 	}
 
 	reqBody, _ := json.Marshal(body)
-	resp, err := http.Post(s.baseURL+testdata.EndpointNamespaces, "application/json", bytes.NewReader(reqBody))
+
+	// 1. Create the request manually to allow adding the cookie
+	url := s.baseURL + testdata.EndpointNamespaces
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqBody))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	// 2. Attach the admin authentication cookie
+	token := s.AdminToken(t)
+	helpers.SetAuthCookie(req, token)
+
+	// 3. Execute the request
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
+
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
 	var resBody map[string]any

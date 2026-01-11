@@ -1,7 +1,5 @@
 package mgmt
 
-import "time"
-
 type UserProfileInfo struct {
 	UserId   string `json:"user_id"`
 	Username string `json:"username"`
@@ -9,12 +7,8 @@ type UserProfileInfo struct {
 }
 
 type AuthLoginResponse struct {
-	Success          bool            `json:"success"`
-	ErrorMessage     string          `json:"error_message"`
-	SessionId        string          `json:"session_id"`
-	AuthorizedScopes []string        `json:"authorized_scopes"`
-	ExpiresAt        time.Time       `json:"expires_at"`
-	User             UserProfileInfo `json:"user"`
+	User UserProfileInfo `json:"user"`
+	// TODO: later, We may send additional information such as resources the user has access 
 }
 
 type AuthLoginRequest struct {
