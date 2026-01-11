@@ -45,10 +45,3 @@ type NamespaceViewDTO struct {
 	Developers  []string   `json:"developers"`
 	Maintainers []string   `json:"maintainers"`
 }
-
-type ListNamespacesResponse struct {
-	Total      int                 `json:"total"`
-	Page       int                 `json:"page"`
-	Limit      int                 `json:"limit"`
-	Namespaces []*NamespaceViewDTO `json:"namespaces"`
-}

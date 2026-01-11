@@ -20,13 +20,6 @@ type UserAccountViewDTO struct {
 	Role                   string     `json:"role"`
 }
 
-type ListUsersResponse struct {
-	Total int                   `json:"total"`
-	Page  int                   `json:"page"` // page starts from 1
-	Limit int                   `json:"limit"`
-	Users []*UserAccountViewDTO `json:"users"`
-}
-
 type CreateUserAccountRequest struct {
 	Username    string `json:"username"`
 	Email       string `json:"email"`
@@ -108,8 +101,6 @@ type UserAccountSetupInfoResponse struct {
 type PasswordValidationRequest struct {
 	Password string `json:"password"`
 }
-
-
 
 type AccountSetupCompleteRequest struct {
 	UserId      string `json:"user_id"`
