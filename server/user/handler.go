@@ -12,7 +12,6 @@ import (
 	"github.com/ksankeerth/open-image-registry/log"
 	"github.com/ksankeerth/open-image-registry/store"
 	"github.com/ksankeerth/open-image-registry/types/api/v1alpha/mgmt"
-	"github.com/ksankeerth/open-image-registry/utils"
 )
 
 type UserAPIHandler struct {
@@ -177,31 +176,6 @@ func (h *UserAPIHandler) ValidateUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *UserAPIHandler) ValidatePassword(w http.ResponseWriter, r *http.Request) {
-	var req mgmt.PasswordValidationRequest
-
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Error occurred when parsing request body: %s", r.RequestURI)
-		httperrors.BadRequest(w, 400, "Unable to parse the request")
-		return
-	}
-
-	valid, msg := utils.ValidatePassword(req.Password)
-	response := mgmt.PasswordValidationResponse{
-		IsValid: valid,
-		Msg:     msg,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	err = json.NewEncoder(w).Encode(response)
-	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Error occurred when writing json response : %s", r.RequestURI)
-	}
-}
-
 // UpdateUserEmail handles PUT /api/v1/users/{id}/email
 func (h *UserAPIHandler) UpdateUserEmail(w http.ResponseWriter, r *http.Request) {
 	userId := chi.URLParam(r, "id")
@@ -315,80 +289,6 @@ func (h *UserAPIHandler) ChangePassword(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// TODO: currently, We don't have any UI to show user-namespaces. Later, We have to develop this.
-// GetUserNamespaces handles GET /api/v1/users/{id}/namespaces
-// func (h *UserAPIHandler) GetUserNamespaces(w http.ResponseWriter, r *http.Request) {
-// 	userId := chi.URLParam(r, "id")
-
-// 	username, namespaceAccess, err := h.svc.getUserNamespaceAccess(userId)
-// 	if err != nil {
-// 		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
-// 		httperrors.InternalError(w, 500, "Request aborted due to errors")
-// 		return
-// 	}
-
-// 	if username == "" && namespaceAccess == nil {
-// 		httperrors.NotFound(w, 404, "No namespace was found")
-// 		return
-// 	}
-
-// 	accessList := make([]*mgmt.NamespaceAccess, len(namespaceAccess))
-
-// 	for _, access := range namespaceAccess {
-// 		dto := h.adapter.ToNamespaceAccess(access)
-// 		accessList = append(accessList, dto)
-// 	}
-
-// 	res := mgmt.UserNamespaceAccessResponse{
-// 		Username:   username,
-// 		AccessList: accessList,
-// 	}
-
-// 	w.Header().Set("Content-Type", "application/json")
-// 	w.WriteHeader(http.StatusOK)
-// 	err = json.NewEncoder(w).Encode(res)
-// 	if err != nil {
-// 		log.Logger().Error().Err(err).Msg("Error occurred when writing response to get user namespace request")
-// 	}
-// }
-
-// GetUserRepositories handles GET /api/v1/users/{id}/repositories
-// func (h *UserAPIHandler) GetUserRepositories(w http.ResponseWriter, r *http.Request) {
-// 	userId := chi.URLParam(r, "id")
-
-// 	username, repositoryAccess, err := h.svc.getUserRepositoryAccess(userId)
-// 	if err != nil {
-// 		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
-// 		httperrors.InternalError(w, 500, "Request aborted due to errors")
-// 		return
-// 	}
-
-// 	if username == "" && repositoryAccess == nil {
-// 		httperrors.NotFound(w, 404, "No namespace was found")
-// 		return
-// 	}
-
-// 	accessList := make([]*mgmt.RepositoryAccess, len(repositoryAccess))
-
-// 	for _, access := range repositoryAccess {
-// 		dto := h.adapter.ToRepositoryAccess(access)
-// 		accessList = append(accessList, dto)
-// 	}
-
-// 	res := mgmt.UserRepositoryAccessResponse{
-// 		Username:   username,
-// 		AccessList: accessList,
-// 	}
-
-// 	w.Header().Set("Content-Type", "application/json")
-// 	w.WriteHeader(http.StatusOK)
-// 	err = json.NewEncoder(w).Encode(res)
-// 	if err != nil {
-// 		log.Logger().Error().Err(err).Msg("Error occurred when writing response to get user repository request")
-// 	}
-
-// }
-
 // GetCurrentUser handles GET /api/v1/users/me
 func (h *UserAPIHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	// Implementation needed
@@ -445,8 +345,8 @@ func (h *UserAPIHandler) GetUserAccountSetupInfo(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Even if the given recovery id is found in db with a different reason, 
-	// We'll respond to user with 404. To avoid leaking unneccessary data to 
+	// Even if the given recovery id is found in db with a different reason,
+	// We'll respond to user with 404. To avoid leaking unneccessary data to
 	// annonymous users
 	if !res.found || res.errorMsg != "" {
 		httperrors.NotFound(w, 404, res.errorMsg)
@@ -497,10 +397,9 @@ func (h *UserAPIHandler) CompleteUserAccountSetup(w http.ResponseWriter, r *http
 }
 
 func (h *UserAPIHandler) GetUser(w http.ResponseWriter, r *http.Request) {
-	identifier := chi.URLParam(r, "identifier")
-	// identifier can be username or id
+	id := chi.URLParam(r, "id")
 
-	user, role, err := h.svc.getUser(r.Context(), identifier)
+	user, role, err := h.svc.getUser(r.Context(), id)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
 		httperrors.InternalError(w, 500, "Request aborted due to errors")
@@ -524,13 +423,23 @@ func (h *UserAPIHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (h *UserAPIHandler) OnboardingRoutes() chi.Router {
+	router := chi.NewRouter()
+
+	router.Route("/", func(r chi.Router) {
+		r.Get("/{uuid}", h.GetUserAccountSetupInfo)
+		r.Post("/{uuid}/complete", h.CompleteUserAccountSetup)
+	})
+
+	return router
+}
+
 func (h *UserAPIHandler) Routes() chi.Router {
 	router := chi.NewRouter()
 	router.Route("/", func(r chi.Router) {
 		r.Get("/me", h.GetCurrentUser)
 		r.Put("/me", h.UpdateCurrentUser)
 		r.Post("/validate", h.ValidateUser)
-		r.Post("/validate-password", h.ValidatePassword)
 
 		r.Put("/{id}/email", h.UpdateUserEmail)
 		r.Put("/{id}/role", h.ChangeRole)
@@ -540,12 +449,10 @@ func (h *UserAPIHandler) Routes() chi.Router {
 		r.Put("/{id}/unlock", h.UnlockUser)
 
 		r.Delete("/{id}", h.DeleteUser)
-		r.Get("/{identifier}", h.GetUser) // identifier can be either username or id
+		r.Get("/{id}", h.GetUser)
 		r.Post("/", h.CreateUser)
 		r.Get("/", h.ListUsers)
 
-		r.Get("/account-setup/{uuid}", h.GetUserAccountSetupInfo)
-		r.Post("/account-setup/{uuid}/complete", h.CompleteUserAccountSetup)
 	})
 	return router
 }

@@ -109,10 +109,7 @@ type PasswordValidationRequest struct {
 	Password string `json:"password"`
 }
 
-type PasswordValidationResponse struct {
-	IsValid bool   `json:"is_valid"`
-	Msg     string `json:"msg"`
-}
+
 
 type AccountSetupCompleteRequest struct {
 	UserId      string `json:"user_id"`

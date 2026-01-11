@@ -48,7 +48,7 @@ func (u *UserTestSuite) Run(t *testing.T) {
 	t.Run("CheckAvailability_Success", u.testCheckAvailabilitySuccess)
 	t.Run("CheckAvailability_Validation", u.testCheckAvailabilityValidation)
 
-	t.Run("ValidatePassword_Success", u.testValidatePassword)
+
 
 	t.Run("UpdateUser_Success", u.testUpdateUserSuccess)
 	t.Run("UpdateUser_Validation", u.testUpdateUserValidationErrors)
@@ -305,41 +305,6 @@ func (u *UserTestSuite) testCheckAvailabilityValidation(t *testing.T) {
 	}
 }
 
-func (u *UserTestSuite) testValidatePassword(t *testing.T) {
-	tcs := []struct {
-		name  string
-		pass  string
-		valid bool
-	}{
-		{"Valid Password", "ValidPassword123!", true},
-		{"Too Short", "sh1!", false},
-		{"No Digits", "NoDigitsHere!", false},
-	}
-
-	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			reqBody, _ := json.Marshal(map[string]string{"password": tc.pass})
-
-			req, err := http.NewRequest(http.MethodPost, u.testBaseURL+testdata.EndpointValidatePassword, bytes.NewReader(reqBody))
-			require.NoError(t, err)
-			req.Header.Set("Content-Type", "application/json")
-			helpers.SetAuthCookie(req, u.seeder.AdminToken(t))
-
-			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
-			defer resp.Body.Close()
-			helpers.AssertStatusCode(t, resp, http.StatusOK)
-
-			var res map[string]any
-			json.NewDecoder(resp.Body).Decode(&res)
-			assert.Equal(t, tc.valid, res["is_valid"])
-			if !tc.valid {
-				assert.NotEmpty(t, res["msg"])
-			}
-		})
-	}
-}
-
 func (u *UserTestSuite) testAccountSetupFlow(t *testing.T) {
 	// Prepare data
 	u1, r1 := u.seeder.CreateUser(t, "accountsetup01", "accountsetup01@t.com", "Guest")
@@ -469,7 +434,6 @@ func (u *UserTestSuite) testGenericContentType(t *testing.T) {
 	endpoints := []string{
 		u.testBaseURL + testdata.EndpointUsers,
 		u.testBaseURL + testdata.EndpointValidateUser,
-		u.testBaseURL + testdata.EndpointValidatePassword,
 	}
 
 	for _, ep := range endpoints {

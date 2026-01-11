@@ -118,9 +118,8 @@ const (
 
 	// Account Setup/Validation
 	EndpointValidateUser         = "/api/v1/users/validate"
-	EndpointValidatePassword     = "/api/v1/users/validate-password"
-	EndpointAccountSetupInfo     = "/api/v1/users/account-setup/%s"
-	EndpointAccountSetupComplete = "/api/v1/users/account-setup/%s/complete"
+	EndpointAccountSetupInfo     = "/api/v1/onboarding/%s"
+	EndpointAccountSetupComplete = "/api/v1/onboarding/%s/complete"
 
 	// Access Management
 	EndpointAccessBase   = "/api/v1/access"

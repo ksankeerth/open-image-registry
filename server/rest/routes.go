@@ -52,6 +52,7 @@ func AppRouter(webappConfig *config.WebAppConfig, store store.Store, jwtProvider
 
 	// API routes
 	router.Route("/api/v1", func(r chi.Router) {
+		r.Mount("/onboarding", userHandler.OnboardingRoutes())
 		r.Mount("/users", authMiddleware.Authenticate(userHandler.Routes()))
 		r.Mount("/auth", authHandler.Routes())
 		r.Mount("/access", authMiddleware.Authenticate(registryAccessHandler.Routes()))
