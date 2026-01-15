@@ -74,6 +74,7 @@ func TestIntegrationV1(t *testing.T) {
 		v1.NewUserTestSuite(seeder, testBaseURL),
 		v1.NewAuthTestSuite(seeder, testBaseURL),
 		v1.NewNamespaceTestSuite(seeder, testBaseURL),
+		v1.NewRepositorySuite(seeder, testBaseURL),
 	}
 
 	for _, suite := range suites {

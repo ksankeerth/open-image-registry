@@ -75,15 +75,30 @@ func (h *RepositoryHandler) createRepository(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if res != nil {
-		if res.conflict {
-			httperrors.AlreadyExist(w, 409, "Another repository with same identifier exists")
-			return
-		}
-		if res.invalidNs {
-			httperrors.BadRequest(w, 400, "Given Namespace is invalid")
-			return
-		}
+	if res == nil {
+		// unexpected sceanrio when err=nil
+		httperrors.InternalError(w, 500, "Unexpected error occurred. Please contact server administrator")
+		return
+	}
+
+	if res.conflict {
+		httperrors.AlreadyExist(w, 409, res.errMsg)
+		return
+	}
+
+	if res.creatorNotFound {
+		httperrors.UnprocessableEntity(w, 422, res.errMsg)
+		return
+	}
+
+	if res.visiblityIssue {
+		httperrors.UnprocessableEntity(w, 422, res.errMsg)
+		return
+	}
+
+	if res.invalidNs {
+		httperrors.UnprocessableEntity(w, 422, res.errMsg)
+		return
 	}
 
 	response := mgmt.CreateNamespaceResponse{
@@ -91,7 +106,7 @@ func (h *RepositoryHandler) createRepository(w http.ResponseWriter, r *http.Requ
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusCreated)
 	err = json.NewEncoder(w).Encode(response)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occured when writing response: %s", r.RequestURI)
@@ -151,7 +166,6 @@ func (h *RepositoryHandler) repositoryExists(w http.ResponseWriter, r *http.Requ
 	} else {
 		w.WriteHeader(http.StatusNotFound)
 	}
-
 }
 
 func (h *RepositoryHandler) getRepository(w http.ResponseWriter, r *http.Request) {

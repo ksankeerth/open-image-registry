@@ -253,7 +253,7 @@ func (h *NamespaceHandler) changeState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httperrors.NotAllowed(w, 403, result.httpErrorMsg)
+	httperrors.UnprocessableEntity(w, 422, result.httpErrorMsg)
 }
 
 func (h *NamespaceHandler) changeVisiblity(w http.ResponseWriter, r *http.Request) {
@@ -279,7 +279,7 @@ func (h *NamespaceHandler) changeVisiblity(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	httperrors.NotAllowed(w, 403, result.httpErrorMsg)
+	httperrors.UnprocessableEntity(w, 422, result.httpErrorMsg)
 }
 
 func (h *NamespaceHandler) grantUserAccess(w http.ResponseWriter, r *http.Request) {
