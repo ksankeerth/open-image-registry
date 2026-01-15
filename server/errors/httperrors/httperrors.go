@@ -60,6 +60,10 @@ func NotFound(w http.ResponseWriter, code int, msg string) {
 	writeError(w, HTTPError{HTTPStatus: http.StatusNotFound, Code: code, Message: msg})
 }
 
+func UnprocessableEntity(w http.ResponseWriter, code int, msg string) {
+	writeError(w, HTTPError{HTTPStatus: http.StatusUnprocessableEntity, Code: code, Message: msg})
+}
+
 func NotAllowed(w http.ResponseWriter, code int, msg string) {
 	writeError(w, HTTPError{HTTPStatus: http.StatusForbidden, Code: code, Message: msg})
 }

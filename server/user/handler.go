@@ -235,7 +235,7 @@ func (h *UserAPIHandler) ChangeRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if errMsg != "" {
-		httperrors.NotAllowed(w, 403, errMsg)
+		httperrors.UnprocessableEntity(w, 422, errMsg)
 		return
 	}
 

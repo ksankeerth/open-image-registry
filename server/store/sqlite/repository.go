@@ -34,7 +34,7 @@ func (r *repositoryStore) Create(ctx context.Context, regId, nsId, name, descrip
 	q := r.getQuerier(ctx)
 
 	var id string
-	err := q.QueryRowContext(ctx, RepositoryCreateQuery, name, description, isPublic, nsId, regId).Scan(&id)
+	err := q.QueryRowContext(ctx, RepositoryCreateQuery, name, description, isPublic, nsId, regId, createdBy).Scan(&id)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("failed to create repository")
 		return "", dberrors.ClassifyError(err, RepositoryCreateQuery)

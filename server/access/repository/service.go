@@ -19,9 +19,12 @@ type repositoryService struct {
 }
 
 type createRepoResult struct {
-	conflict  bool
-	invalidNs bool
-	id        string
+	conflict        bool
+	invalidNs       bool
+	visiblityIssue  bool
+	creatorNotFound bool
+	id              string
+	errMsg          string
 }
 
 func (svc *repositoryService) createRepository(reqCtx context.Context, req *mgmt.CreateRepositoryRequest) (*createRepoResult,
@@ -44,15 +47,38 @@ func (svc *repositoryService) createRepository(reqCtx context.Context, req *mgmt
 
 	res := &createRepoResult{}
 
-	nsExists, err := svc.store.Namespaces().ExistsByIdentifier(ctx, constants.HostedRegistryID, req.NamespaceId)
+	ns, err := svc.store.Namespaces().Get(ctx, req.NamespaceId)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Creating repository failed due to database errrors: %s:%s", req.NamespaceId, req.Name)
 		return nil, err
 	}
 
-	if !nsExists {
+	if ns == nil {
 		res.invalidNs = true
-		log.Logger().Warn().Msgf("Not allowed to create repository with invalid namespace: %s", req.NamespaceId)
+		res.errMsg = "Namespace not found"
+		return res, nil
+	}
+
+	if !ns.IsPublic && req.IsPublic {
+		res.visiblityIssue = true
+		res.errMsg = "Not allowed to create a public repository under private namespace"
+		return res, nil
+	}
+
+	if ns.State == constants.ResourceStateDeprecated || ns.State == constants.ResourceStateDisabled {
+		res.invalidNs = true
+		res.errMsg = "Not allowed create repositories under disabled or deprecated namespace"
+		return res, nil
+	}
+
+	creator, err := svc.store.Users().Get(ctx, req.CreatedBy)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Creating repository failed due to database errors")
+		return nil, err
+	}
+	if creator == nil {
+		res.creatorNotFound = true
+		res.errMsg = "Creator not found"
 		return res, nil
 	}
 
@@ -64,11 +90,13 @@ func (svc *repositoryService) createRepository(reqCtx context.Context, req *mgmt
 
 	if repoExists {
 		res.conflict = true
+		res.errMsg = "Same repository name is used by another repository"
 		log.Logger().Warn().Msgf("Not allowed to create another repository with same identifier: %s:%s", req.NamespaceId, req.Name)
 		return res, nil
 	}
 
-	id, err := svc.store.Repositories().Create(ctx, constants.HostedRegistryID, req.NamespaceId, req.Name, req.Description, req.IsPublic, req.CreatedBy)
+	id, err := svc.store.Repositories().Create(ctx, constants.HostedRegistryID, req.NamespaceId, req.Name, req.Description, req.IsPublic,
+		req.CreatedBy)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Creating repository failed due to database errrors: %s:%s", req.NamespaceId, req.Name)
 		return nil, err

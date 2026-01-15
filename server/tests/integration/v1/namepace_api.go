@@ -871,7 +871,7 @@ func (n *NamespaceTestSuite) testNamespaceStateChange(t *testing.T) {
 			name:       "State change from 'Active' to 'Disabled'",
 			identifier: n4,
 			newState:   "Disabled",
-			statusCode: http.StatusForbidden,
+			statusCode: http.StatusUnprocessableEntity,
 			errMsg:     "Not allowed to change namespace state from 'Active' to 'Disabled'",
 		},
 	}
@@ -967,7 +967,7 @@ func (n *NamespaceTestSuite) testNamespaceVisibilityChange(t *testing.T) {
 			name:       "Forbidden: Change visibility of disabled namespace",
 			identifier: n4,
 			isPublic:   "true",
-			statusCode: http.StatusForbidden,
+			statusCode: http.StatusUnprocessableEntity,
 			errMsg:     "Not allowed to change visibility of a namespace when it is in disabled state",
 		},
 	}
