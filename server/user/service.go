@@ -27,26 +27,6 @@ type userService struct {
 	userIdNameMap sync.Map // for now, we'll sync.Map, later we have to use map with Mutex
 }
 
-func (svc *userService) getUsername(userId string) (string, error) {
-	val, ok := svc.userIdNameMap.Load(userId)
-	if ok {
-		return val.(string), nil
-	}
-
-	user, err := svc.store.Users().Get(context.Background(), userId)
-	if err != nil {
-		return "", err
-	}
-	if user == nil {
-		return "", nil
-	}
-	username := user.Username
-
-	svc.userIdNameMap.Store(userId, username)
-
-	return username, nil
-}
-
 func (svc *userService) getUserList(cond *store.ListQueryConditions) (users []*models.UserAccountView, total int, err error) {
 
 	ctx := context.Background()
@@ -255,10 +235,6 @@ func (svc *userService) changePassword(req *mgmt.PasswordChangeRequest) (res *ch
 	return res, err
 }
 
-func (svc *userService) getUserAccount(userId string) (*models.UserAccount, error) {
-	return svc.store.Users().Get(context.Background(), userId)
-}
-
 func (svc *userService) deleteUserAccount(userId string) (err error) {
 	return svc.store.Users().Delete(context.Background(), userId)
 }
@@ -267,43 +243,6 @@ func (svc *userService) deleteUserAccount(userId string) (err error) {
 // address change by sending a mail
 func (svc *userService) updateUserEmail(userId, email string) (err error) {
 	return svc.store.Users().UpdateEmail(context.Background(), userId, email)
-}
-
-func (svc *userService) updateUserDisplayName(userId, displayName string) (err error) {
-	return svc.store.Users().UpdateDisplayName(context.Background(), userId, displayName)
-}
-
-func (svc *userService) assignRoleToUser(userId, roleName string) (err error) {
-	ctx := context.Background()
-	tx, err := svc.store.Begin(ctx)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Error occurred when starting transaction")
-		return err
-	}
-
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
-		}
-	}()
-
-	ctx = store.WithTxContext(ctx, tx)
-
-	err = svc.store.Users().UnAssignRole(ctx, userId)
-	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Removing existing role from user(%s) failed.", userId)
-		return err
-	}
-
-	err = svc.store.Users().AssignRole(ctx, userId, roleName)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Failed to assign role to user")
-		return err
-	}
-
-	return nil
 }
 
 type lockResult struct {

@@ -63,21 +63,6 @@ func validateNamespaceGrantAccessRequest(req *mgmt.AccessGrantRequest) (valid bo
 	return true, ""
 }
 
-func validateNamesapceRevokeRequest(req *mgmt.AccessRevokeRequest) (valid bool, errMsg string) {
-	if req.UserID == "" {
-		return false, "Invalid user id"
-	}
-
-	if req.ResourceType != constants.ResourceTypeNamespace {
-		return false, "Resource is not Namespace"
-	}
-
-	if req.ResourceID == "" {
-		return false, "Invalid ResourceID"
-	}
-	return true, ""
-}
-
 func validateListNamespaceCondition(cond *store.ListQueryConditions) (bool, string) {
 	if cond.SortField != "" && !slices.Contains(constants.AllowedNamespaceSortFields, cond.SortField) {
 		return false, fmt.Sprintf("Not allowed sort field: %s", cond.SortField)

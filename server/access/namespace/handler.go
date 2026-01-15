@@ -46,8 +46,8 @@ func (h *NamespaceHandler) Routes() chi.Router {
 		r.Get("/users", h.listUserAccess)
 		r.Get("/repositories", h.listRepositories)
 
-		r.Post("/users", h.grantUserAccess)             // strictly use id instead of name
-		r.Delete("/users/{userID}", h.revokeUserAccess) // strictly use id instead of name
+		r.Post("/users", h.grantUserAccess)
+		r.Delete("/users/{userID}", h.revokeUserAccess)
 	})
 
 	return r
@@ -321,26 +321,12 @@ func (h *NamespaceHandler) grantUserAccess(w http.ResponseWriter, r *http.Reques
 
 func (h *NamespaceHandler) revokeUserAccess(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	userID := chi.URLParam(r, "userID")
 
-	var request mgmt.AccessRevokeRequest
-
-	err := json.NewDecoder(r.Body).Decode(&request)
-	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Parsing request failed : %s", r.RequestURI)
-		httperrors.BadRequest(w, 400, "Bad request")
-		return
-	}
-
-	valid, errMsg := validateNamesapceRevokeRequest(&request)
-	if !valid {
-		httperrors.BadRequest(w, 404, errMsg)
-		return
-	}
-
-	if id != request.ResourceID {
-		log.Logger().Warn().Msgf("Resource ID in request body does not match the ID in the URL path")
-		httperrors.BadRequest(w, 400, "Resource ID in request body does not match the ID in the URL path")
-		return
+	request := mgmt.AccessRevokeRequest{
+		ResourceType: constants.ResourceTypeNamespace,
+		ResourceID:   id,
+		UserID:       userID,
 	}
 
 	statusCode, msg, err := h.svc.revokeAccess(r.Context(), &request)
@@ -371,16 +357,16 @@ func (h *NamespaceHandler) listRepositories(w http.ResponseWriter, r *http.Reque
 
 	repositories, total, err := h.svc.listRepositories(r.Context(), id, cond)
 
-	res := mgmt.ListRepositoriesResponse{
-		Total:        total,
-		Page:         int(cond.Page),
-		Limit:        int(cond.Limit),
-		Repositories: make([]*mgmt.RepositoryViewDTO, len(repositories)),
+	res := mgmt.EntityListResponse[*mgmt.RepositoryViewDTO]{
+		Total:    total,
+		Page:     int(cond.Page),
+		Limit:    int(cond.Limit),
+		Entities: make([]*mgmt.RepositoryViewDTO, len(repositories)),
 	}
 
 	for index, repo := range repositories {
 		repoDto := repository.ToRepositoryViewDTO(repo)
-		res.Repositories[index] = repoDto
+		res.Entities[index] = repoDto
 	}
 
 	w.Header().Set("Content-Type", "application/json")

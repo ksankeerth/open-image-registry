@@ -559,71 +559,30 @@ func (n *NamespaceTestSuite) testNamespaceRevokeAccess(t *testing.T) {
 
 	tcs := []struct {
 		name       string
-		body       map[string]any
 		resourceId string
 		userId     string
 		statusCode int
 	}{
 		{
-			name: "Revoke user access",
-			body: map[string]any{
-				"user_id":       d1,
-				"resource_type": "namespace",
-				"resource_id":   nsId,
-			},
+			name:       "Revoke user access",
 			resourceId: nsId,
 			userId:     d1,
 			statusCode: http.StatusOK,
 		},
 		{
-			name: "Non existing user",
-			body: map[string]any{
-				"user_id":       "non-existing-uuid",
-				"resource_type": "namespace",
-				"resource_id":   nsId,
-			},
+			name:       "Non existing user",
 			userId:     "non-existing-uuid",
 			resourceId: nsId,
 			statusCode: http.StatusNotFound,
 		},
 		{
-			name: "Existing user without resource access",
-			body: map[string]any{
-				"user_id":       d2,
-				"resource_type": "namespace",
-				"resource_id":   nsId,
-			},
+			name:       "Existing user without resource access",
 			userId:     d2,
 			resourceId: nsId,
 			statusCode: http.StatusNotFound,
 		},
 		{
-			name: "Invalid body",
-			body: map[string]any{
-				"test": "invalid body",
-			},
-			resourceId: nsId,
-			userId:     "invalid-id",
-			statusCode: http.StatusBadRequest,
-		},
-		{
-			name: "Invalid resource type",
-			body: map[string]any{
-				"user_id":       d2,
-				"resource_type": "Namespace",
-				"resource_id":   nsId,
-			},
-			resourceId: nsId,
-			userId:     d2,
-			statusCode: http.StatusBadRequest,
-		},
-		{
 			name: "Invalid resource_id",
-			body: map[string]any{
-				"user_id":       d2,
-				"resource_type": "namespace",
-				"resource_id":   "invalid-namespaceid",
-			},
 			userId:     d2,
 			resourceId: "invalid-namespaceid",
 			statusCode: http.StatusNotFound,
@@ -632,11 +591,9 @@ func (n *NamespaceTestSuite) testNamespaceRevokeAccess(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			reqBody, err := json.Marshal(tc.body)
-			require.NoError(t, err)
 
 			url := n.testBaseURL + fmt.Sprintf(testdata.EndpointNamespaceUsers, tc.resourceId) + "/" + tc.userId
-			req, err := http.NewRequest(http.MethodDelete, url, bytes.NewReader(reqBody))
+			req, err := http.NewRequest(http.MethodDelete, url, nil)
 			require.NoError(t, err)
 			helpers.SetAuthCookie(req, n.seeder.AdminToken(t))
 

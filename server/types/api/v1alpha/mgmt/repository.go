@@ -17,13 +17,6 @@ type RepositoryViewDTO struct {
 	UpdatedAt   *time.Time `json:"updated_at"`
 }
 
-type ListRepositoriesResponse struct {
-	Total        int                  `json:"total"`
-	Page         int                  `json:"page"`
-	Limit        int                  `json:"limit"`
-	Repositories []*RepositoryViewDTO `json:"repositories"`
-}
-
 type CreateRepositoryRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`

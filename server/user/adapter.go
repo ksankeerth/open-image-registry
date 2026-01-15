@@ -112,61 +112,6 @@ func (ua *UserAdapter) ToChangePasswordResposne(result *changePasswordResult) *m
 	}
 }
 
-// func (ua *UserAdapter) ToNamespaceAccess(access *models.NamespaceAccess) *mgmt.NamespaceAccess {
-// 	if access == nil {
-// 		return nil
-// 	}
-
-// 	return &mgmt.NamespaceAccess{
-// 		ID:          access.ID,
-// 		Namespace:   access.Namespace,
-// 		ResourceID:  access.ResourceID,
-// 		UserID:      access.UserID,
-// 		AccessLevel: access.AccessLevel,
-// 		GrantedBy:   access.GrantedBy,
-// 		CreatedAt:   access.CreatedAt,
-// 		UpdatedAt:   access.UpdatedAt,
-// 	}
-// }
-
-// func (ua *UserAdapter) ToRepositoryAccess(access *models.RepositoryAccess) *mgmt.RepositoryAccess {
-// 	if access == nil {
-// 		return nil
-// 	}
-
-// 	return &mgmt.RepositoryAccess{
-// 		ID:          access.ID,
-// 		Namespace:   access.Namespace,
-// 		Repository:  access.Repository,
-// 		ResourceID:  access.ResourceID,
-// 		UserID:      access.UserID,
-// 		AccessLevel: access.AccessLevel,
-// 		GrantedBy:   access.GrantedBy,
-// 		CreatedAt:   access.CreatedAt,
-// 		UpdatedAt:   access.UpdatedAt,
-// 	}
-// }
-
-// func (ua *UserAdapter) ToRepositoryAccessSlice(slice []*models.RepositoryAccess) []*mgmt.RepositoryAccess {
-// 	results := make([]*mgmt.RepositoryAccess, len(slice))
-
-// 	for _, access := range slice {
-// 		results = append(results, ua.ToRepositoryAccess(access))
-// 	}
-
-// 	return results
-// }
-
-// func (ua *UserAdapter) ToNamespaceAccessSlice(slice []*models.NamespaceAccess) []*mgmt.NamespaceAccess {
-// 	results := make([]*mgmt.NamespaceAccess, len(slice))
-
-// 	for _, access := range slice {
-// 		results = append(results, ua.ToNamespaceAccess(access))
-// 	}
-
-// 	return results
-// }
-
 func (ua *UserAdapter) toUserAccountSetupVerficationResponse(result *accountSetupVerficationResult) *mgmt.UserAccountSetupInfoResponse {
 	var response mgmt.UserAccountSetupInfoResponse
 	response.DisplayName = result.displayName

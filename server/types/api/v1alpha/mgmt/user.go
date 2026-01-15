@@ -40,13 +40,6 @@ type ChangeUserRoleRequest struct {
 	Role string `json:"role"`
 }
 
-type PasswordRecoveryDTO struct {
-	UserId     string    `json:"user_id"`
-	RecoveryId string    `json:"recovery_id"`
-	ReasonType int       `json:"reason_type"`
-	CreatedAt  time.Time `json:"created_at"`
-}
-
 type PasswordChangeRequest struct {
 	UserId      string `json:"user_id"`
 	RecoveryId  string `json:"recovery_id"`
@@ -62,21 +55,6 @@ type ChangePasswordResponse struct {
 type UpdateUserEmailRequest struct {
 	UserId string `json:"user_id"`
 	Email  string `json:"email"`
-}
-
-type AssignRoleRequest struct {
-	UserId   string `json:"user_id"`
-	RoleName string `json:"role_name"`
-}
-
-type UnassignRoleRequest struct {
-	UserId   string `json:"user_id"`
-	RoleName string `json:"role_name"`
-}
-
-type GetUserRoleRequest struct {
-	UserId   string `json:"user_id"`
-	RoleName string `json:"role_name"`
 }
 
 type UsernameEmailValidationRequest struct {

@@ -114,16 +114,16 @@ func (h *RepositoryHandler) listRepositories(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	res := mgmt.ListRepositoriesResponse{
-		Total:        total,
-		Page:         int(cond.Page),
-		Limit:        int(cond.Limit),
-		Repositories: make([]*mgmt.RepositoryViewDTO, len(repositories)),
+	res := mgmt.EntityListResponse[*mgmt.RepositoryViewDTO]{
+		Total:    total,
+		Page:     int(cond.Page),
+		Limit:    int(cond.Limit),
+		Entities: make([]*mgmt.RepositoryViewDTO, len(repositories)),
 	}
 
 	for index, repo := range repositories {
 		repoDto := ToRepositoryViewDTO(repo)
-		res.Repositories[index] = repoDto
+		res.Entities[index] = repoDto
 	}
 
 	w.Header().Set("Content-Type", "application/json")
