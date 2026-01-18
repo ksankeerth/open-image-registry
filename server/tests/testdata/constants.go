@@ -121,25 +121,25 @@ const (
 	EndpointAccountSetupInfo     = "/api/v1/onboarding/%s"
 	EndpointAccountSetupComplete = "/api/v1/onboarding/%s/complete"
 
-	// Access Management
-	EndpointAccessBase   = "/api/v1/access"
-	EndpointNamespaces   = "/api/v1/access/namespaces"
-	EndpointRepositories = "/api/v1/access/repositories"
-	EndpointUpstreams    = "/api/v1/access/upstreams"
+	// Resource Management
+	EndpointResourceBase = "/api/v1/resource"
+	EndpointNamespaces   = "/api/v1/resource/namespaces"
+	EndpointRepositories = "/api/v1/resource/repositories"
+	EndpointUpstreams    = "/api/v1/resource/upstreams"
 
-	// Namespace Access ID Specific
-	EndpointNamespaceByID       = "/api/v1/access/namespaces/%s"
-	EndpointNamespaceState      = "/api/v1/access/namespaces/%s/state"
-	EndpointNamespaceVisibility = "/api/v1/access/namespaces/%s/visibility"
-	EndpointNamespaceUsers      = "/api/v1/access/namespaces/%s/users"
-	EndpointNamespaceUserRevoke = "/api/v1/access/namespaces/%s/users/%s" // Identifier, UserID
+	// Namespace ID Specific
+	EndpointNamespaceByID       = "/api/v1/resource/namespaces/%s"
+	EndpointNamespaceState      = "/api/v1/resource/namespaces/%s/state"
+	EndpointNamespaceVisibility = "/api/v1/resource/namespaces/%s/visibility"
+	EndpointNamespaceUsers      = "/api/v1/resource/namespaces/%s/users"
+	EndpointNamespaceUserRevoke = "/api/v1/resource/namespaces/%s/users/%s" // Identifier, UserID
 
-	// Repository Access ID Specific
-	EndpointRepositoryByID       = "/api/v1/access/repositories/%s"
-	EndpointRepositoryState      = "/api/v1/access/repositories/%s/state"
-	EndpointRepositoryVisibility = "/api/v1/access/repositories/%s/visibility"
-	EndpointRepositoryUsers      = "/api/v1/access/repositories/%s/users"
-	EndpointRepositoryUserRevoke = "/api/v1/access/repositories/%s/users/%s"
+	// Repository ID Specific
+	EndpointRepositoryByID       = "/api/v1/resource/repositories/%s"
+	EndpointRepositoryState      = "/api/v1/resource/repositories/%s/state"
+	EndpointRepositoryVisibility = "/api/v1/resource/repositories/%s/visibility"
+	EndpointRepositoryUsers      = "/api/v1/resource/repositories/%s/users"
+	EndpointRepositoryUserRevoke = "/api/v1/resource/repositories/%s/users/%s"
 
 	EndpointHealthCheck = "/api/v1/health"
 )

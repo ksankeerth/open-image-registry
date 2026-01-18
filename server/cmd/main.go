@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ksankeerth/open-image-registry/access/resource"
 	"github.com/ksankeerth/open-image-registry/client/email"
 	"github.com/ksankeerth/open-image-registry/config"
 	"github.com/ksankeerth/open-image-registry/constants"
@@ -20,6 +19,7 @@ import (
 	"github.com/ksankeerth/open-image-registry/listeners"
 	"github.com/ksankeerth/open-image-registry/log"
 	"github.com/ksankeerth/open-image-registry/registry"
+	"github.com/ksankeerth/open-image-registry/resource/access"
 	"github.com/ksankeerth/open-image-registry/rest"
 	"github.com/ksankeerth/open-image-registry/security"
 	"github.com/ksankeerth/open-image-registry/storage"
@@ -115,7 +115,7 @@ func main() {
 	}
 
 	// ------------- create instance of resource access manager ----------------
-	accessManager := resource.NewManager(store)
+	accessManager := access.NewManager(store)
 
 	// -------------- create jwt provider --------------------------------------
 	authConfig := appConfig.Security.AuthToken

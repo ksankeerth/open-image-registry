@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/ksankeerth/open-image-registry/access/resource"
 	"github.com/ksankeerth/open-image-registry/constants"
 	"github.com/ksankeerth/open-image-registry/log"
+	"github.com/ksankeerth/open-image-registry/resource/access"
 	"github.com/ksankeerth/open-image-registry/store"
 	"github.com/ksankeerth/open-image-registry/types/api/v1alpha/mgmt"
 	"github.com/ksankeerth/open-image-registry/types/models"
@@ -15,7 +15,7 @@ import (
 
 type namespaceService struct {
 	store         store.Store
-	accessManager *resource.Manager
+	accessManager *access.Manager
 }
 
 type createNsResult struct {
@@ -53,7 +53,6 @@ func (svc *namespaceService) createNamespace(reqCtx context.Context, req *mgmt.C
 		return res, nil
 	}
 
-
 	res.nsId, err = svc.store.Namespaces().Create(ctx, constants.HostedRegistryID, req.Name, req.Purpose,
 		req.Description, req.IsPublic)
 	if err != nil {
@@ -78,7 +77,7 @@ func (svc *namespaceService) createNamespace(reqCtx context.Context, req *mgmt.C
 		return res, err
 	}
 
-	if reason != resource.Success {
+	if reason != access.Success {
 		res.statusCode, res.errMsg = reason.MapToHTTP(true)
 		return
 	}

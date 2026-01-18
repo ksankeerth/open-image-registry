@@ -5,11 +5,11 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/ksankeerth/open-image-registry/access/resource"
 	"github.com/ksankeerth/open-image-registry/client/email"
 	"github.com/ksankeerth/open-image-registry/errors/httperrors"
 	"github.com/ksankeerth/open-image-registry/lib"
 	"github.com/ksankeerth/open-image-registry/log"
+	"github.com/ksankeerth/open-image-registry/resource/access"
 	"github.com/ksankeerth/open-image-registry/store"
 	"github.com/ksankeerth/open-image-registry/types/api/v1alpha/mgmt"
 )
@@ -26,7 +26,7 @@ func NewUserAPIHandler(store store.Store, emailClient *email.EmailClient) *UserA
 			store:         store,
 			adapter:       &UserAdapter{},
 			ec:            emailClient,
-			accessManager: resource.NewManager(store),
+			accessManager: access.NewManager(store),
 		},
 	}
 }

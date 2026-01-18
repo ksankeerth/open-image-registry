@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ksankeerth/open-image-registry/access/resource"
 	"github.com/ksankeerth/open-image-registry/client/email"
 	"github.com/ksankeerth/open-image-registry/config"
 	"github.com/ksankeerth/open-image-registry/lib"
+	"github.com/ksankeerth/open-image-registry/resource/access"
 	"github.com/ksankeerth/open-image-registry/rest"
 	"github.com/ksankeerth/open-image-registry/storage"
 	"github.com/ksankeerth/open-image-registry/store"
@@ -150,7 +150,7 @@ func setupTestEnvironment() error {
 	}
 
 	// Creating Resource Access Manager
-	accessManager := resource.NewManager(store)
+	accessManager := access.NewManager(store)
 
 	authConfig := appConfig.Security.AuthToken
 	jwtAuth := lib.NewOAuthEC256JWTAuthenticator(authConfig.GetPrivateKey(), authConfig.GetPublicKey(), authConfig.Issuer,

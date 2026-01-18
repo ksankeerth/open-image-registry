@@ -1,4 +1,4 @@
-package resource
+package access
 
 import (
 	"github.com/ksankeerth/open-image-registry/types/api/v1alpha/mgmt"
