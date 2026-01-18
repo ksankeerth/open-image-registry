@@ -42,4 +42,3 @@ func toNamespaceViewDTO(view *models.NamespaceView) *mgmt.NamespaceViewDTO {
 		Maintainers: view.Maintainers,
 	}
 }
-

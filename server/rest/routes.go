@@ -10,20 +10,20 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/httplog/v2"
-	"github.com/ksankeerth/open-image-registry/access"
-	"github.com/ksankeerth/open-image-registry/access/resource"
 	"github.com/ksankeerth/open-image-registry/auth"
 	"github.com/ksankeerth/open-image-registry/client/email"
 	"github.com/ksankeerth/open-image-registry/config"
 	"github.com/ksankeerth/open-image-registry/lib"
 	"github.com/ksankeerth/open-image-registry/log"
 	"github.com/ksankeerth/open-image-registry/middleware"
+	"github.com/ksankeerth/open-image-registry/resource"
+	"github.com/ksankeerth/open-image-registry/resource/access"
 	"github.com/ksankeerth/open-image-registry/store"
 	"github.com/ksankeerth/open-image-registry/user"
 )
 
 func AppRouter(webappConfig *config.WebAppConfig, store store.Store, jwtProvider lib.JWTProvider,
-	accessManager *resource.Manager, ec *email.EmailClient) *chi.Mux {
+	accessManager *access.Manager, ec *email.EmailClient) *chi.Mux {
 	router := chi.NewRouter()
 
 	// Middleware setup
@@ -48,14 +48,14 @@ func AppRouter(webappConfig *config.WebAppConfig, store store.Store, jwtProvider
 
 	authHandler := auth.NewAuthAPIHandler(store, jwtProvider, authMiddleware)
 	userHandler := user.NewUserAPIHandler(store, ec)
-	registryAccessHandler := access.NewRegistryAccessHandler(store, accessManager)
+	registryAccessHandler := resource.NewRegistryResourceHandler(store, accessManager)
 
 	// API routes
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Mount("/onboarding", userHandler.OnboardingRoutes())
 		r.Mount("/users", authMiddleware.Authenticate(userHandler.Routes()))
 		r.Mount("/auth", authHandler.Routes())
-		r.Mount("/access", authMiddleware.Authenticate(registryAccessHandler.Routes()))
+		r.Mount("/resource", authMiddleware.Authenticate(registryAccessHandler.Routes()))
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 			//TODO: develop health check endpoint later
 			w.WriteHeader(http.StatusOK)

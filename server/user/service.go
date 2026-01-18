@@ -6,11 +6,11 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/ksankeerth/open-image-registry/access/resource"
 	"github.com/ksankeerth/open-image-registry/client/email"
 	"github.com/ksankeerth/open-image-registry/config"
 	"github.com/ksankeerth/open-image-registry/constants"
 	"github.com/ksankeerth/open-image-registry/errors/dberrors"
+	"github.com/ksankeerth/open-image-registry/resource/access"
 	"github.com/ksankeerth/open-image-registry/security"
 	"github.com/ksankeerth/open-image-registry/store"
 
@@ -20,7 +20,7 @@ import (
 )
 
 type userService struct {
-	accessManager *resource.Manager
+	accessManager *access.Manager
 	store         store.Store
 	ec            *email.EmailClient
 	adapter       *UserAdapter

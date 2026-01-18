@@ -6,11 +6,11 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/ksankeerth/open-image-registry/access/resource"
 	"github.com/ksankeerth/open-image-registry/constants"
 	"github.com/ksankeerth/open-image-registry/errors/httperrors"
 	"github.com/ksankeerth/open-image-registry/lib"
 	"github.com/ksankeerth/open-image-registry/log"
+	"github.com/ksankeerth/open-image-registry/resource/access"
 	"github.com/ksankeerth/open-image-registry/store"
 	"github.com/ksankeerth/open-image-registry/types/api/v1alpha/mgmt"
 )
@@ -19,7 +19,7 @@ type RepositoryHandler struct {
 	svc *repositoryService
 }
 
-func NewHandler(s store.Store, accessManager *resource.Manager) *RepositoryHandler {
+func NewHandler(s store.Store, accessManager *access.Manager) *RepositoryHandler {
 	svc := &repositoryService{
 		store:         s,
 		accessManager: accessManager,
@@ -304,7 +304,7 @@ func (h *RepositoryHandler) listUserAccess(w http.ResponseWriter, r *http.Reques
 
 	cond := lib.ParseListConditions(r, map[string]store.FilterOperator{})
 
-	ok, errMsg := resource.ValidateListUserAccessCondition(cond)
+	ok, errMsg := access.ValidateListUserAccessCondition(cond)
 	if !ok {
 		httperrors.BadRequest(w, 400, errMsg)
 		return
@@ -319,8 +319,8 @@ func (h *RepositoryHandler) listUserAccess(w http.ResponseWriter, r *http.Reques
 		Entities: make([]*mgmt.ResourceAccessViewDTO, len(userAccesses)),
 	}
 
-	for index, access := range userAccesses {
-		dto := resource.ToResourceAccessViewDTO(access)
+	for index, acs := range userAccesses {
+		dto := access.ToResourceAccessViewDTO(acs)
 		res.Entities[index] = dto
 	}
 
