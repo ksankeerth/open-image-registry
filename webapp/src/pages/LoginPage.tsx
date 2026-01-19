@@ -4,7 +4,6 @@ import LogoComponent from '../components/LogoComponent';
 import { InputText } from 'primereact/inputtext';
 import { Button } from 'primereact/button';
 import { Checkbox } from 'primereact/checkbox';
-import { useToast } from '../components/ToastComponent';
 import { ProgressSpinner } from 'primereact/progressspinner';
 import { useNavigate } from 'react-router-dom';
 import { postAuthLogin } from '../api';
@@ -17,7 +16,7 @@ const LoginPage = () => {
 
   const [processing, setProcessing] = useState<boolean>(false);
 
-  const [errorMsg, setErrorMsg] = useState<string>("");
+  const [errorMsg, setErrorMsg] = useState<string>('');
 
   const navigate = useNavigate();
 
@@ -44,11 +43,11 @@ const LoginPage = () => {
 
     if (error) {
       setProcessing(false);
-      setErrorMsg(error.error_message)
+      setErrorMsg(error.error_message);
     }
 
     if (data) {
-      navigate("/");
+      navigate('/');
     }
   };
 
@@ -193,7 +192,7 @@ const LoginPage = () => {
                   checked={rememberMe}
                   inputId="remember_me"
                   name="remember_me"
-                  onChange={(e) => setRememberMe((currentValue) => !currentValue)}
+                  onChange={() => setRememberMe((currentValue) => !currentValue)}
                 />
                 <label htmlFor="remember_me" className="ml-2 text-sm">
                   Remember me
@@ -203,8 +202,8 @@ const LoginPage = () => {
                 Forgot Password?
               </div>
             </div>
-            <div className='flex justify-content-center'>
-              <span className='text-red-500 text-sm'>{errorMsg}</span>
+            <div className="flex justify-content-center">
+              <span className="text-red-500 text-sm">{errorMsg}</span>
             </div>
             <div>
               <Button
@@ -213,7 +212,7 @@ const LoginPage = () => {
                 size="small"
                 onClick={handleLogin}
               >
-                <span>Sign In</span>
+                <span className="font-semibold">Sign In</span>
               </Button>
             </div>
           </div>
