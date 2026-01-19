@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "generate:api": "openapi-ts -i ./api-spec-v1.yaml -o ./src/api -c @hey-api/client-fetch"
   },
   "author": "Sankeerthan Kasilingam",
   "license": "ISC",
@@ -40,6 +41,7 @@
   "devDependencies": {
     "@eslint/compat": "^2.0.0",
     "@eslint/js": "^9.39.2",
+    "@hey-api/openapi-ts": "^0.90.4",
     "@types/d3": "^7.4.3",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",

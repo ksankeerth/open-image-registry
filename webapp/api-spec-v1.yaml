@@ -1,0 +1,1567 @@
+openapi: 3.0.3
+info:
+  title: Open Image Registry - Management API
+  version: 1.2.0
+  description: |
+    API for managing users, namespaces, repositories and access control.
+
+    ### Security Model:
+    * **Stateful JWT**: Authentication is handled via an HTTP-only cookie `auth_token`.
+    * **Revocation**: The `/auth/logout` endpoint is protected and explicitly revokes the token signature.
+    * **Onboarding**: Public access is granted to `/onboarding` for account activation using a setup id.
+
+    ### Password Requirements:
+    * Minimum 12 characters, maximum 64 characters
+    * Must contain at least one uppercase letter
+    * Must contain at least one lowercase letter
+    * Must contain at least one digit
+    * Must contain at least one symbol from: !@#$%^&*
+
+    ### Username Requirements:
+    * 3-32 characters
+    * Allowed characters: letters, numbers, dots, underscores, hyphens
+    * Pattern: ^[a-zA-Z0-9._-]{3,32}$
+
+servers:
+  - url: /api/v1
+    description: Base Management API URL
+
+tags:
+  - name: Authentication
+    description: Login and protected logout.
+  - name: Onboarding
+    description: Public flows for initial account activation and setup.
+  - name: Users
+    description: Protected user management (Admin only).
+  - name: Namespaces
+    description: Registry namespace management.
+
+paths:
+  # --- AUTHENTICATION ---
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Authenticate and establish session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: OK. Returns `auth_token` cookie.
+          headers:
+            Set-Cookie:
+              schema:
+                { type: string, example: 'auth_token=eyJhbG...; HttpOnly; Secure; SameSite=Strict' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Terminate session and revoke token
+      security:
+        - cookieAuth: []
+      description: |
+        Requires a valid session. The middleware extracts the signature, 
+        and the handler marks it as revoked in the database.
+      responses:
+        '200':
+          description: Session revoked.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # --- ONBOARDING ---
+  /onboarding/{uuid}:
+    get:
+      tags: [Onboarding]
+      summary: Retrieve setup details via UUID
+      description: |
+        Get account setup information for a new user account using the setup UUID.
+        This endpoint validates that:
+        - The recovery UUID exists and is valid
+        - The recovery reason is specifically for new account setup (not password reset)
+
+        Returns 404 with error_message for:
+        - Invalid or non-existent recovery IDs
+        - Recovery IDs with incorrect reason (e.g., forgot password instead of account setup)
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+          description: The account setup UUID provided during user creation
+      responses:
+        '200':
+          description: Account setup information retrieved successfully
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserAccountSetupInfoResponse' }
+              examples:
+                success:
+                  summary: Valid setup link
+                  value:
+                    error_message: ''
+                    username: 'new_user'
+                    user_id: '550e8400-e29b-41d4-a716-446655440000'
+                    display_name: 'New User'
+                    email: 'new.user@example.com'
+                    role: 'Developer'
+        '404':
+          description: Setup UUID not found, already used, or has incorrect recovery reason
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserAccountSetupInfoResponse' }
+              examples:
+                invalid_link:
+                  summary: Invalid or expired link
+                  value:
+                    error_message: 'This account setup link is no longer valid. It may have already been used..'
+                    username: ''
+                    user_id: ''
+                    display_name: ''
+                    email: ''
+                    role: ''
+                wrong_reason:
+                  summary: Link not for account setup
+                  value:
+                    error_message: 'This link is not valid. Please check it again ...'
+                    username: ''
+                    user_id: ''
+                    display_name: ''
+                    email: ''
+                    role: ''
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /onboarding/{uuid}/complete:
+    post:
+      tags: [Onboarding]
+      summary: Finalize account and set password
+      description: |
+        Complete the account setup process by setting the password.
+
+        Validation rules enforced:
+        - user_id must not be empty
+        - username must match pattern ^[a-zA-Z0-9._-]{3,32}$
+        - password must be 12-64 characters with uppercase, lowercase, digit, and symbol (!@#$%^&*)
+        - uuid in body must match uuid in path
+
+        Returns 400 for:
+        - Invalid password (too short, missing required character types)
+        - UUID mismatch between path and body
+        - Invalid username format
+        - Empty user_id
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+          description: The account setup UUID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountSetupCompleteRequest' }
+            examples:
+              valid:
+                summary: Valid account setup completion
+                value:
+                  user_id: '550e8400-e29b-41d4-a716-446655440000'
+                  username: 'new_user'
+                  password: 'SecureP@ss123!'
+                  uuid: 'setup-uuid-789'
+                  display_name: 'New User'
+              invalid_password:
+                summary: Password too short
+                value:
+                  user_id: '550e8400-e29b-41d4-a716-446655440000'
+                  username: 'new_user'
+                  password: 'short'
+                  uuid: 'setup-uuid-789'
+      responses:
+        '200':
+          description: Account activated successfully
+        '400':
+          description: Invalid request or validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                invalid_password:
+                  summary: Password validation failed
+                  value:
+                    code: 400
+                    message: 'Password must be at least 12 characters long'
+                uuid_mismatch:
+                  summary: UUID mismatch
+                  value:
+                    code: 400
+                    message: "Request UUID doesn't match with request body"
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  # --- USERS ---
+  /users:
+    get:
+      tags: [Users]
+      summary: List all user accounts
+      description: Retrieve a paginated list of user accounts with optional filtering and sorting
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+        - name: sort
+          in: query
+          schema: { type: string }
+          description: Sort field (allowed fields defined in constants)
+        - name: filter
+          in: query
+          schema: { type: string }
+          description: Filter criteria in format field:operator:value
+      responses:
+        '200':
+          description: List of users retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedBase'
+                  - type: object
+                    properties:
+                      entities:
+                        type: array
+                        items: { $ref: '#/components/schemas/UserAccountViewDTO' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+    post:
+      tags: [Users]
+      summary: Create a new user account
+      description: |
+        Create a new user account and generate an account setup UUID.
+
+        Validation rules:
+        - username: 3-32 chars, pattern ^[a-zA-Z0-9._-]+$
+        - email: valid email format
+        - role: must be one of "Admin", "Maintainer", "Developer", "Guest" (case-sensitive)
+        - display_name: optional, used if provided
+
+        Returns Account-Setup-Id header with UUID for account activation.
+
+        Returns 400 for:
+        - Invalid JSON payload
+        - Missing required fields (username, email, role)
+        - Invalid email format
+        - Invalid username pattern
+        - Invalid role value
+
+        Returns 409 for:
+        - Username already exists
+        - Email already exists
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateUserAccountRequest' }
+            examples:
+              all_fields:
+                summary: Create user with all fields
+                value:
+                  username: 'test001'
+                  email: 'test001@test.com'
+                  display_name: 'Test User 001'
+                  role: 'Admin'
+              minimal:
+                summary: Create user with minimal fields
+                value:
+                  username: 'test002'
+                  email: 'test002@test.com'
+                  role: 'Maintainer'
+      responses:
+        '201':
+          description: User account created successfully
+          headers:
+            Account-Setup-Id:
+              schema: { type: string, format: uuid }
+              description: UUID for completing account setup
+              required: true
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateUserAccountResponse' }
+              example:
+                username: 'test001'
+                user_id: '550e8400-e29b-41d4-a716-446655440000'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                invalid_json:
+                  summary: Malformed JSON
+                  value:
+                    code: 400
+                    message: 'Invalid payload'
+                missing_email:
+                  summary: Missing required field
+                  value:
+                    code: 400
+                    message: 'Invalid email'
+                invalid_role:
+                  summary: Invalid role value
+                  value:
+                    code: 400
+                    message: 'Invalid role: GodMode'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: User already exists (username or email conflict)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /users/me:
+    get:
+      tags: [Users]
+      summary: Get current authenticated user
+      description: Retrieve information about the currently authenticated user
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Current user information
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GetUserResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+    put:
+      tags: [Users]
+      summary: Update current authenticated user
+      description: Update information for the currently authenticated user
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateUserAccountRequest' }
+      responses:
+        '200':
+          description: User updated successfully
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /users/validate:
+    post:
+      tags: [Users]
+      summary: Validate username and email availability
+      description: Check if a username and/or email is available for registration
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UsernameEmailValidationRequest' }
+      responses:
+        '200':
+          description: Validation results
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UsernameEmailValidationResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /users/{id}:
+    get:
+      tags: [Users]
+      summary: Get a specific user by ID
+      description: Retrieve detailed information about a specific user
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: User ID
+      responses:
+        '200':
+          description: User information retrieved successfully
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GetUserResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+    put:
+      tags: [Users]
+      summary: Update a user account
+      description: Update user account information (display name)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: User ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateUserAccountRequest' }
+      responses:
+        '200':
+          description: User updated successfully
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+    delete:
+      tags: [Users]
+      summary: Delete a user account
+      description: Permanently delete a user account
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: User ID
+      responses:
+        '200':
+          description: User deleted successfully
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /users/{id}/email:
+    put:
+      tags: [Users]
+      summary: Update user email address
+      description: Update the email address for a specific user
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: User ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateUserEmailRequest' }
+      responses:
+        '200':
+          description: Email updated successfully
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /users/{id}/role:
+    put:
+      tags: [Users]
+      summary: Change user role
+      description: Change the role of a specific user (admin, maintainer, developer, guest)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: User ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangeUserRoleRequest' }
+      responses:
+        '200':
+          description: Role changed successfully
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Operation not allowed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /users/{id}/password:
+    put:
+      tags: [Users]
+      summary: Change user password
+      description: Change the password for a specific user. Can be initiated by user (requires old_password) or admin (uses recovery_id)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: User ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordChangeRequest' }
+      responses:
+        '200':
+          description: Password change result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangePasswordResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /users/{id}/lock:
+    put:
+      tags: [Users]
+      summary: Lock a user account
+      description: Lock a user account to prevent login
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: User ID
+      responses:
+        '200':
+          description: User account locked successfully
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: User account is already locked
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /users/{id}/unlock:
+    put:
+      tags: [Users]
+      summary: Unlock a user account
+      description: Unlock a previously locked user account
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: User ID
+      responses:
+        '200':
+          description: User account unlocked successfully
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: Cannot unlock new user account
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  # --- NAMESPACES ---
+  /resource/namespaces:
+    get:
+      tags: [Namespaces]
+      summary: List and filter namespaces
+      description: |
+        Retrieve a paginated list of registry namespaces with optional filtering, sorting, and searching.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+        - name: sort_by
+          in: query
+          schema: { type: string }
+        - name: order
+          in: query
+          schema: { type: string, enum: [asc, desc] }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string, enum: [Active, Deprecated, Disabled] }
+        - name: purpose
+          in: query
+          schema: { type: string, enum: [Team, Project] }
+      responses:
+        '200':
+          description: List of namespaces retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedBase'
+                  - type: object
+                    properties:
+                      entities:
+                        type: array
+                        items: { $ref: '#/components/schemas/NamespaceViewDTO' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+    post:
+      tags: [Namespaces]
+      summary: Create a new namespace
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateNamespaceRequest' }
+      responses:
+        '201':
+          description: Namespace created successfully
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateNamespaceResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /resource/namespaces/{id}:
+    head:
+      tags: [Namespaces]
+      summary: Check if namespace exists
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Namespace exists }
+        '404': { description: Namespace not found }
+
+    get:
+      tags: [Namespaces]
+      summary: Get namespace details
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 'OK'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NamespaceResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    put:
+      tags: [Namespaces]
+      summary: Update namespace
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateNamespaceRequest' }
+      responses:
+        '200': { description: Namespace updated successfully }
+
+    delete:
+      tags: [Namespaces]
+      summary: Delete namespace
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Namespace deleted successfully }
+
+  /resource/namespaces/{id}/visibility:
+    patch:
+      tags: [Namespaces]
+      summary: Change namespace visibility
+      description: Change whether a namespace is public or private.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Namespace ID or name
+
+        - name: public
+          in: query
+          required: true
+          schema:
+            type: boolean
+          description: Whether namespace should be public
+
+      responses:
+        '200':
+          description: Visibility changed successfully or no-op
+
+        '400':
+          description: Invalid query parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 400
+                error_message: 'Invalid query param'
+
+        '404':
+          description: Namespace not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+        '422':
+          description: Visibility change not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 422
+                error_message: 'Not allowed to change visibility of a namespace when it is in disabled state'
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /resource/namespaces/{id}/state:
+    patch:
+      tags: [Namespaces]
+      summary: Change namespace state
+      description: Change the lifecycle state of a namespace.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Namespace ID or name
+
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [Active, Deprecated, Disabled]
+          description: New namespace state
+
+      responses:
+        '200':
+          description: State changed successfully or no-op if same state
+
+        '400':
+          description: Invalid or missing state query parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing:
+                  value:
+                    code: 400
+                    error_message: 'Missing query param state in request'
+                invalid:
+                  value:
+                    code: 400
+                    error_message: 'Invalid namespace state'
+
+        '404':
+          description: Namespace not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+        '422':
+          description: State transition not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 422
+                error_message: "Not allowed to change namespace state from 'Active' to 'Disabled'"
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /resource/namespaces/{id}/users:
+    get:
+      tags: [Namespaces]
+      summary: List users with access to namespace
+      description: Retrieve a paginated list of users who have access to the namespace.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Namespace ID
+
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+
+        - name: access_level
+          in: query
+          schema:
+            type: string
+            enum: [Guest, Developer, Maintainer]
+          description: Filter by access level
+
+        - name: search
+          in: query
+          schema: { type: string }
+          description: Search by username
+
+        - name: sort
+          in: query
+          schema: { type: string }
+          description: Sort field (allowed fields defined in constants)
+
+      responses:
+        '200':
+          description: List of user accesses retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedBase'
+                  - type: object
+                    properties:
+                      entities:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ResourceAccessViewDTO'
+
+        '400':
+          description: Invalid filter or sort field
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+        '404':
+          description: Namespace not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+        '500': { $ref: '#/components/responses/InternalError' }
+
+    post:
+      tags: [Namespaces, Access]
+      summary: Grant user access to namespace
+      description: |
+        Grants a user access to a namespace.
+
+        Rules enforced:
+        - resource_type must be `Namespace`
+        - resource_id must match path `{id}`
+        - Access level must comply with user role hierarchy
+        - Existing access cannot be overwritten
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Namespace ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessGrantRequest'
+      responses:
+        '200':
+          description: Access granted successfully
+        '400':
+          description: Invalid request body, invalid resource_type, or validation failure
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Access level not permitted for user role
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: User or namespace not found, or resource_id mismatch
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '409':
+          description: Access already exists and cannot be overwritten
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /resource/namespaces/{id}/users/{userID}:
+    delete:
+      tags: [Namespaces, Access]
+      summary: Revoke user access from namespace
+      description: |
+        Revokes a user's access from a namespace.
+
+        Rules enforced:
+        - resource_type must be `Namespace`
+        - resource_id must match path `{id}`
+        - userID path is routing only, validation is done from body
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Namespace ID
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+          description: User ID
+      responses:
+        '200':
+          description: Access revoked successfully
+        '400':
+          description: Invalid body or invalid resource_type
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: User not found, namespace not found, or access does not exist
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: auth_token
+
+  parameters:
+    PageQuery:
+      name: page
+      in: query
+      schema: { type: integer, default: 1, minimum: 1 }
+      description: Page number for pagination
+
+    LimitQuery:
+      name: limit
+      in: query
+      schema: { type: integer, default: 10, minimum: 1, maximum: 100 }
+      description: Number of items per page
+
+  responses:
+    Unauthorized:
+      description: 'Invalid, expired, or revoked session cookie.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+    NotFound:
+      description: 'Resource not found.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+    BadRequest:
+      description: 'Malformed request or validation error.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+    InternalError:
+      description: 'Internal server error.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+    Forbidden:
+      description: 'Access forbidden.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+    Conflict:
+      description: 'Conflict with existing resource.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  schemas:
+    PaginatedBase:
+      type: object
+      required: [total, page, limit]
+      properties:
+        total:
+          type: integer
+          description: Total number of items
+        page:
+          type: integer
+          description: Current page number
+        limit:
+          type: integer
+          description: Items per page
+
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+          description: HTTP status code
+        message:
+          type: string
+          description: Error message
+
+    # --- USER MANAGEMENT SCHEMAS ---
+    CreateUserAccountRequest:
+      type: object
+      required: [username, email, role]
+      properties:
+        username:
+          type: string
+          description: Unique username (3-32 chars, alphanumeric with ._- allowed)
+          pattern: '^[a-zA-Z0-9._-]{3,32}$'
+          minLength: 3
+          maxLength: 32
+          example: 'john_doe'
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: 'john.doe@example.com'
+        display_name:
+          type: string
+          description: Display name for the user
+          example: 'John Doe'
+        role:
+          type: string
+          enum: [Admin, Maintainer, Developer, Guest]
+          description: User role in the system
+          example: 'Developer'
+
+    CreateUserAccountResponse:
+      type: object
+      required: [username, user_id]
+      properties:
+        username:
+          type: string
+          description: Created username
+          example: 'john_doe'
+        user_id:
+          type: string
+          description: Generated user ID (UUID)
+          example: '550e8400-e29b-41d4-a716-446655440000'
+
+    UpdateUserAccountRequest:
+      type: object
+      required: [display_name]
+      properties:
+        display_name:
+          type: string
+          description: New display name (1-255 chars)
+          minLength: 1
+          maxLength: 255
+          example: 'John R. Doe'
+
+    UpdateUserEmailRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          description: New email address
+          example: 'john.new@example.com'
+
+    ChangeUserRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [admin, maintainer, developer, guest]
+          description: New role for the user
+          example: 'maintainer'
+
+    PasswordChangeRequest:
+      type: object
+      required: [user_id, password]
+      properties:
+        user_id:
+          type: string
+          description: User ID (must match path parameter)
+          example: '550e8400-e29b-41d4-a716-446655440000'
+        recovery_id:
+          type: string
+          description: Password recovery ID (for admin-initiated resets)
+          example: 'recovery-uuid-123'
+        password:
+          type: string
+          format: password
+          description: |
+            New password (12-64 chars, must contain uppercase, lowercase, digit, and symbol !@#$%^&*)
+          minLength: 12
+          maxLength: 64
+          example: 'NewP@ssw0rd123!'
+        old_password:
+          type: string
+          format: password
+          description: Current password (required for user-initiated changes)
+          example: 'OldP@ssw0rd123!'
+
+    ChangePasswordResponse:
+      type: object
+      required: [status, message]
+      properties:
+        status:
+          type: string
+          enum: [success, failed]
+          description: Status of password change operation
+          example: 'success'
+        message:
+          type: string
+          description: Detailed message about the result
+          example: 'Password changed successfully.'
+
+    UsernameEmailValidationRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          description: Username to validate (optional if email provided)
+          example: 'potential_user'
+        email:
+          type: string
+          format: email
+          description: Email to validate (optional if username provided)
+          example: 'user@example.com'
+
+    UsernameEmailValidationResponse:
+      type: object
+      required: [username_available, email_available]
+      properties:
+        username_available:
+          type: boolean
+          description: Whether the username is available
+          example: true
+        email_available:
+          type: boolean
+          description: Whether the email is available
+          example: false
+
+    GetUserResponse:
+      type: object
+      required: [id, username, email, role, created_at]
+      properties:
+        id:
+          type: string
+          description: User ID
+          example: '550e8400-e29b-41d4-a716-446655440000'
+        username:
+          type: string
+          description: Username
+          example: 'john_doe'
+        email:
+          type: string
+          format: email
+          description: Email address
+          example: 'john.doe@example.com'
+        display_name:
+          type: string
+          description: Display name
+          example: 'John Doe'
+        locked:
+          type: boolean
+          description: Whether the account is locked
+          example: false
+        locked_reason:
+          type: integer
+          description: Numeric code for lock reason
+          example: 0
+        failed_attempts:
+          type: integer
+          description: Number of failed login attempts
+          example: 0
+        role:
+          type: string
+          description: User role
+          example: 'Developer'
+        created_at:
+          type: string
+          format: date-time
+          description: Account creation timestamp
+          example: '2024-01-15T10:30:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last update timestamp
+          example: '2024-01-20T14:45:00Z'
+        locked_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When account was locked
+          example: null
+
+    UserAccountViewDTO:
+      type: object
+      required: [id, username, email, locked, failed_attempts, created_at, role]
+      properties:
+        id:
+          type: string
+          description: User ID
+          example: '550e8400-e29b-41d4-a716-446655440000'
+        username:
+          type: string
+          description: Username
+          example: 'john_doe'
+        email:
+          type: string
+          format: email
+          description: Email address
+          example: 'john.doe@example.com'
+        display_name:
+          type: string
+          description: Display name
+          example: 'John Doe'
+        locked:
+          type: boolean
+          description: Whether account is locked
+          example: false
+        locked_reason:
+          type: string
+          description: Human-readable lock reason
+          example: 'User Account locked due to multiple failed attempts.'
+        locked_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Lock timestamp
+          example: null
+        failed_attempts:
+          type: integer
+          description: Number of failed login attempts
+          example: 2
+        password_recovery_id:
+          type: string
+          description: Active password recovery ID
+          example: 'recovery-uuid-456'
+        password_recovery_reason:
+          type: string
+          description: Human-readable password recovery reason
+          example: 'User forgot password.'
+        password_recovery_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Password recovery creation time
+          example: '2024-01-18T09:00:00Z'
+        last_loggedin_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last successful login
+          example: '2024-01-22T16:20:00Z'
+        created_at:
+          type: string
+          format: date-time
+          description: Account creation time
+          example: '2024-01-15T10:30:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last update time
+          example: '2024-01-20T14:45:00Z'
+        role:
+          type: string
+          description: User role
+          example: 'Developer'
+
+    # --- ONBOARDING SCHEMAS ---
+    UserAccountSetupInfoResponse:
+      type: object
+      required: [error_message, username, user_id, display_name, email, role]
+      properties:
+        error_message:
+          type: string
+          description: Error message if setup info cannot be retrieved (empty on success)
+          example: ''
+        username:
+          type: string
+          description: Username for the account
+          example: 'new_user'
+        user_id:
+          type: string
+          description: User ID
+          example: '550e8400-e29b-41d4-a716-446655440000'
+        display_name:
+          type: string
+          description: Display name
+          example: 'New User'
+        email:
+          type: string
+          format: email
+          description: Email address
+          example: 'new.user@example.com'
+        role:
+          type: string
+          description: Assigned role
+          example: 'Developer'
+
+    AccountSetupCompleteRequest:
+      type: object
+      required: [user_id, username, password, uuid]
+      properties:
+        user_id:
+          type: string
+          description: User ID from setup info
+          example: '550e8400-e29b-41d4-a716-446655440000'
+        username:
+          type: string
+          description: Username from setup info (3-32 chars)
+          pattern: '^[a-zA-Z0-9._-]{3,32}$'
+          example: 'new_user'
+        display_name:
+          type: string
+          description: Optional display name
+          maxLength: 255
+          example: 'New User'
+        password:
+          type: string
+          format: password
+          description: |
+            New password (12-64 chars, must contain uppercase, lowercase, digit, and symbol !@#$%^&*)
+          minLength: 12
+          maxLength: 64
+          example: 'SecureP@ss123!'
+        uuid:
+          type: string
+          format: uuid
+          description: Setup UUID (must match path parameter)
+          example: 'setup-uuid-789'
+
+    # --- ACCESS CONTROL SCHEMAS ---
+    ResourceAccessViewDTO:
+      type: object
+      required:
+        - id
+        - resource_type
+        - resource_name
+        - resource_id
+        - access_level
+        - user_id
+        - username
+        - granted_user
+        - granted_by
+        - granted_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Access record ID
+
+        resource_type:
+          type: string
+          enum: [namespace, repository, upstream]
+          description: Resource type
+
+        resource_name:
+          type: string
+          description: Human readable resource name
+
+        resource_id:
+          type: string
+          format: uuid
+          description: Resource ID
+
+        access_level:
+          type: string
+          enum: [Guest, Developer, Maintainer]
+          description: Granted access level
+
+        user_id:
+          type: string
+          format: uuid
+          description: User ID who owns this access
+
+        username:
+          type: string
+          description: Username of the access owner
+
+        granted_user:
+          type: string
+          description: Username of the grantor
+
+        granted_by:
+          type: string
+          format: uuid
+          description: User ID of the grantor
+
+        granted_at:
+          type: string
+          format: date-time
+          description: Access granted timestamp
+
+    # --- NAMESPACE SCHEMAS ---
+    NamespaceViewDTO:
+      type: object
+      required: [registry_id, id, name, state, is_public, purpose, created_at]
+      properties:
+        registry_id:
+          type: string
+          description: Registry ID
+          example: 'registry-001'
+        id:
+          type: string
+          description: Namespace ID
+          example: 'ns-550e8400'
+        name:
+          type: string
+          description: Namespace name
+          example: 'production'
+        description:
+          type: string
+          description: Namespace description
+          example: 'Production environment namespace'
+        state:
+          type: string
+          description: Current state of namespace
+          example: 'Active'
+        is_public:
+          type: boolean
+          description: Whether namespace is public
+          example: false
+        purpose:
+          type: string
+          enum: [Team, Project]
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: '2024-01-10T08:00:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last update timestamp
+          example: '2024-01-15T10:30:00Z'
+        developers:
+          type: array
+          items: { type: string }
+          description: List of developer user IDs
+          example: ['dev-user-1', 'dev-user-2']
+        maintainers:
+          type: array
+          items: { type: string }
+          description: List of maintainer user IDs
+          example: ['maintainer-user-1']
+
+    CreateNamespaceRequest:
+      type: object
+      required: [name, purpose, maintainers]
+      properties:
+        name:
+          type: string
+          pattern: '^[a-zA-Z0-9_-]+$'
+        description:
+          type: string
+        purpose:
+          type: string
+          enum: [Team, Project]
+        is_public:
+          type: boolean
+        maintainers:
+          type: array
+          minItems: 1
+          items: { type: string }
+
+    CreateNamespaceResponse:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+
+    UpdateNamespaceRequest:
+      type: object
+      required: [purpose, description]
+      properties:
+        description:
+          type: string
+        purpose:
+          type: string
+          enum: [Team, Project]
+
+    NamespaceResponse:
+      type: object
+      required: [id, registry_id, name, state, is_public, created_at]
+      properties:
+        id: { type: string }
+        registry_id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        purpose:
+          type: string
+          enum: [Team, Project]
+        is_public: { type: boolean }
+        state:
+          type: string
+          enum: [Active, Deprecated, Disabled]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    AccessGrantRequest:
+      type: object
+      required: [user_id, resource_id, resource_type, access_level, granted_by]
+      properties:
+        user_id: { type: string }
+        resource_id: { type: string }
+        resource_type:
+          type: string
+          enum: [Namespace, Repository, Upstream]
+        access_level:
+          type: string
+          enum: [Guest, Developer, Maintainer]
+        granted_by: { type: string }

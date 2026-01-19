@@ -12,7 +12,7 @@ import { defineConfig } from 'eslint/config';
 
 export default defineConfig(
   {
-    ignores: ['dist', 'node_modules', 'build', 'coverage', 'vite.config.ts'],
+    ignores: ['dist', 'node_modules', 'build', 'coverage', 'vite.config.ts', 'src/api'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
