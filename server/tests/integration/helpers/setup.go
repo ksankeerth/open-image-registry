@@ -74,7 +74,7 @@ func InitializeAdminUserAccount(s store.Store, adminConfig *config.AdminUserAcco
 	}
 
 	if userAcc != nil && userAcc.Locked {
-		err = s.Users().UnlockAccount(ctx, adminConfig.Username)
+		err = s.Users().UnlockAccount(ctx, adminConfig.Username, false)
 		if err != nil {
 			return err
 		}
@@ -91,7 +91,7 @@ func InitializeAdminUserAccount(s store.Store, adminConfig *config.AdminUserAcco
 		if err != nil {
 			return err
 		}
-		err = s.Users().UnlockAccount(ctx, adminConfig.Username)
+		err = s.Users().UnlockAccount(ctx, adminConfig.Username, false)
 		if err != nil {
 			return err
 		}

@@ -71,7 +71,7 @@ func (svc *authService) authenticateUser(reqCtx context.Context, req *mgmt.AuthL
 		return loginRes, nil
 	}
 
-	if userAccount.Locked {
+	if userAccount.Locked && userAccount.LockedReason != constants.MaxFailedLoginAttempts {
 		loginRes.success = false
 		loginRes.errorMessage = "User account has been locked! Contact system administrator."
 		loginRes.statusCode = http.StatusForbidden
@@ -121,13 +121,18 @@ func (svc *authService) authenticateUser(reqCtx context.Context, req *mgmt.AuthL
 
 		return loginRes, nil
 	}
-	err = svc.store.Users().UnlockAccount(ctx, req.Username)
-	if err != nil {
-		loginRes.success = false
-		loginRes.errorMessage = "Opps! Error occured when logging in!"
-		loginRes.statusCode = http.StatusInternalServerError
 
-		return loginRes, nil
+	if matched && userAccount.LockedReason == constants.MaxFailedLoginAttempts {
+		err = svc.store.Users().UnlockAccount(ctx, req.Username, true)
+		if err != nil {
+			loginRes.success = false
+			loginRes.errorMessage = "Opps! Error occured when logging in!"
+			loginRes.statusCode = http.StatusInternalServerError
+
+			return loginRes, nil
+		}
+
+		svc.store.Users().RecordFailedAttempt(ctx, req.Username)
 	}
 
 	roleName, err := svc.store.Users().GetRole(ctx, userAccount.Id)

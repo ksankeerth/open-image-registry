@@ -20,7 +20,7 @@ type UserStore interface {
 
 	LockAccount(ctx context.Context, username string, lockedReason int) (err error)
 
-	UnlockAccount(ctx context.Context, username string) (err error)
+	UnlockAccount(ctx context.Context, username string, resetFailures bool) (err error)
 
 	RecordFailedAttempt(ctx context.Context, username string) error
 

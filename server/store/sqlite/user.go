@@ -99,13 +99,20 @@ func (u *userStore) LockAccount(ctx context.Context, username string, lockedReas
 	return nil
 }
 
-func (u *userStore) UnlockAccount(ctx context.Context, username string) error {
+func (u *userStore) UnlockAccount(ctx context.Context, username string, resetFailures bool) error {
 	q := u.getQuerier(ctx)
 
-	_, err := q.ExecContext(ctx, UserUnlockUserAccountByUsernameQuery, username)
+	var query string
+	if resetFailures {
+		query = UserUnlockAndResetFailedAttemptsQuery
+	} else {
+		query = UserUnlockUserAccountByUsernameQuery
+	}
+
+	_, err := q.ExecContext(ctx, query, username)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("failed to unlock user account")
-		return dberrors.ClassifyError(err, UserUnlockUserAccountByUsernameQuery)
+		return dberrors.ClassifyError(err, query)
 	}
 	return nil
 }
