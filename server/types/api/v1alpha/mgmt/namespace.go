@@ -45,3 +45,7 @@ type NamespaceViewDTO struct {
 	Developers  []string   `json:"developers"`
 	Maintainers []string   `json:"maintainers"`
 }
+
+type NamespaceNameCheckResponse struct {
+	Available bool `json:"available"`
+}

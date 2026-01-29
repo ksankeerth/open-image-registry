@@ -15,6 +15,7 @@ import (
 	"github.com/ksankeerth/open-image-registry/resource/repository"
 	"github.com/ksankeerth/open-image-registry/store"
 	"github.com/ksankeerth/open-image-registry/types/api/v1alpha/mgmt"
+	"github.com/ksankeerth/open-image-registry/utils"
 )
 
 type NamespaceHandler struct {
@@ -36,6 +37,7 @@ func (h *NamespaceHandler) Routes() chi.Router {
 
 	r.Post("/", h.createNamespace)
 	r.Get("/", h.listNamespaces)
+	r.Get("/check-name", h.checkNameAvailability)
 	r.Route("/{id}", func(r chi.Router) {
 		r.Head("/", h.namespaceExists)
 		r.Get("/", h.getNamespace)
@@ -142,6 +144,32 @@ func (h *NamespaceHandler) namespaceExists(w http.ResponseWriter, r *http.Reques
 		w.WriteHeader(http.StatusOK)
 	} else {
 		w.WriteHeader(http.StatusNotFound)
+	}
+}
+
+func (h *NamespaceHandler) checkNameAvailability(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+
+	if !utils.IsValidNamespace(name) {
+		httperrors.BadRequest(w, 400, "Invalid name format")
+		return
+	}
+
+	available, err := h.svc.checkNameAvailability(r.Context(), name)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
+		httperrors.InternalError(w, 500, "Request aborted due to errors")
+		return
+	}
+
+	res := mgmt.NamespaceNameCheckResponse{
+		Available: available,
+	}
+
+	w.WriteHeader(http.StatusOK)
+	err = json.NewEncoder(w).Encode(res)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Marshalling response failed due to errors: %s", r.RequestURI)
 	}
 }
 

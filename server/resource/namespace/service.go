@@ -531,3 +531,14 @@ func (svc *namespaceService) listUsers(reqCtx context.Context, identifier string
 
 	return accesses, total, err
 }
+
+func (svc *namespaceService) checkNameAvailability(reqCtx context.Context, name string) (available bool, err error) {
+
+	available, err = svc.store.Namespaces().ExistsByIdentifier(reqCtx, constants.HostedRegistryID, name)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to check namespace name availability due to database errors")
+		return false, err
+	}
+
+	return available, nil
+}
