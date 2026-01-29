@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   build: {
+    outDir: 'build',
     rollupOptions: {
       onwarn(warning, warn) {
         // Ignore "use client" warnings from node_modules
