@@ -4,19 +4,19 @@ info:
   version: 1.2.0
   description: |
     API for managing users, namespaces, repositories and access control.
-    
+
     ### Security Model:
     * **Stateful JWT**: Authentication is handled via an HTTP-only cookie `auth_token`.
     * **Revocation**: The `/auth/logout` endpoint is protected and explicitly revokes the token signature.
     * **Onboarding**: Public access is granted to `/onboarding` for account activation using a setup id.
-    
+
     ### Password Requirements:
     * Minimum 12 characters, maximum 64 characters
     * Must contain at least one uppercase letter
     * Must contain at least one lowercase letter
     * Must contain at least one digit
     * Must contain at least one symbol from: !@#$%^&*
-    
+
     ### Username Requirements:
     * 3-32 characters
     * Allowed characters: letters, numbers, dots, underscores, hyphens
@@ -55,9 +55,14 @@ paths:
       responses:
         '200':
           description: OK. Returns `auth_token` cookie.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileInfo'
           headers:
             Set-Cookie:
-              schema: { type: string, example: "auth_token=eyJhbG...; HttpOnly; Secure; SameSite=Strict" }
+              schema:
+                { type: string, example: 'auth_token=eyJhbG...; HttpOnly; Secure; SameSite=Strict' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
   /auth/logout:
@@ -84,7 +89,7 @@ paths:
         This endpoint validates that:
         - The recovery UUID exists and is valid
         - The recovery reason is specifically for new account setup (not password reset)
-        
+
         Returns 404 with error_message for:
         - Invalid or non-existent recovery IDs
         - Recovery IDs with incorrect reason (e.g., forgot password instead of account setup)
@@ -104,13 +109,13 @@ paths:
                 success:
                   summary: Valid setup link
                   value:
-                    error_message: ""
-                    username: "new_user"
-                    user_id: "550e8400-e29b-41d4-a716-446655440000"
-                    display_name: "New User"
-                    email: "new.user@example.com"
-                    role: "Developer"
-        '404': 
+                    error_message: ''
+                    username: 'new_user'
+                    user_id: '550e8400-e29b-41d4-a716-446655440000'
+                    display_name: 'New User'
+                    email: 'new.user@example.com'
+                    role: 'Developer'
+        '404':
           description: Setup UUID not found, already used, or has incorrect recovery reason
           content:
             application/json:
@@ -119,21 +124,21 @@ paths:
                 invalid_link:
                   summary: Invalid or expired link
                   value:
-                    error_message: "This account setup link is no longer valid. It may have already been used.."
-                    username: ""
-                    user_id: ""
-                    display_name: ""
-                    email: ""
-                    role: ""
+                    error_message: 'This account setup link is no longer valid. It may have already been used..'
+                    username: ''
+                    user_id: ''
+                    display_name: ''
+                    email: ''
+                    role: ''
                 wrong_reason:
                   summary: Link not for account setup
                   value:
-                    error_message: "This link is not valid. Please check it again ..."
-                    username: ""
-                    user_id: ""
-                    display_name: ""
-                    email: ""
-                    role: ""
+                    error_message: 'This link is not valid. Please check it again ...'
+                    username: ''
+                    user_id: ''
+                    display_name: ''
+                    email: ''
+                    role: ''
         '500': { $ref: '#/components/responses/InternalError' }
 
   /onboarding/{uuid}/complete:
@@ -142,13 +147,13 @@ paths:
       summary: Finalize account and set password
       description: |
         Complete the account setup process by setting the password.
-        
+
         Validation rules enforced:
         - user_id must not be empty
         - username must match pattern ^[a-zA-Z0-9._-]{3,32}$
         - password must be 12-64 characters with uppercase, lowercase, digit, and symbol (!@#$%^&*)
         - uuid in body must match uuid in path
-        
+
         Returns 400 for:
         - Invalid password (too short, missing required character types)
         - UUID mismatch between path and body
@@ -169,22 +174,22 @@ paths:
               valid:
                 summary: Valid account setup completion
                 value:
-                  user_id: "550e8400-e29b-41d4-a716-446655440000"
-                  username: "new_user"
-                  password: "SecureP@ss123!"
-                  uuid: "setup-uuid-789"
-                  display_name: "New User"
+                  user_id: '550e8400-e29b-41d4-a716-446655440000'
+                  username: 'new_user'
+                  password: 'SecureP@ss123!'
+                  uuid: 'setup-uuid-789'
+                  display_name: 'New User'
               invalid_password:
                 summary: Password too short
                 value:
-                  user_id: "550e8400-e29b-41d4-a716-446655440000"
-                  username: "new_user"
-                  password: "short"
-                  uuid: "setup-uuid-789"
+                  user_id: '550e8400-e29b-41d4-a716-446655440000'
+                  username: 'new_user'
+                  password: 'short'
+                  uuid: 'setup-uuid-789'
       responses:
         '200':
           description: Account activated successfully
-        '400': 
+        '400':
           description: Invalid request or validation error
           content:
             application/json:
@@ -194,7 +199,7 @@ paths:
                   summary: Password validation failed
                   value:
                     code: 400
-                    message: "Password must be at least 12 characters long"
+                    message: 'Password must be at least 12 characters long'
                 uuid_mismatch:
                   summary: UUID mismatch
                   value:
@@ -212,14 +217,35 @@ paths:
       parameters:
         - $ref: '#/components/parameters/PageQuery'
         - $ref: '#/components/parameters/LimitQuery'
-        - name: sort
+        - $ref: '#/components/parameters/SortOrder'
+        - $ref: '#/components/parameters/SearchQuery'
+        - name: sort_by
           in: query
-          schema: { type: string }
-          description: Sort field (allowed fields defined in constants)
-        - name: filter
+          description: Sort field.
+          schema:
+            type: string
+            default: username
+            enum:
+              - username
+              - email
+              - role
+              - display_name
+              - last_loggedin_at
+        - name: role
           in: query
-          schema: { type: string }
-          description: Filter criteria in format field:operator:value
+          description: "Filter field role; Possible values are 'Admin', 'Developer', 'Maintainer', 'Guest'"
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+              enum: ['Admin', 'Developer', 'Maintainer', 'Guest']
+          style: form
+          explode: true
+        - name: locked
+          in: query
+          schema: { type: boolean }
+          description: Filter user accounts by account state
       responses:
         '200':
           description: List of users retrieved successfully
@@ -242,22 +268,22 @@ paths:
       summary: Create a new user account
       description: |
         Create a new user account and generate an account setup UUID.
-        
+
         Validation rules:
         - username: 3-32 chars, pattern ^[a-zA-Z0-9._-]+$
         - email: valid email format
         - role: must be one of "Admin", "Maintainer", "Developer", "Guest" (case-sensitive)
         - display_name: optional, used if provided
-        
+
         Returns Account-Setup-Id header with UUID for account activation.
-        
+
         Returns 400 for:
         - Invalid JSON payload
         - Missing required fields (username, email, role)
         - Invalid email format
         - Invalid username pattern
         - Invalid role value
-        
+
         Returns 409 for:
         - Username already exists
         - Email already exists
@@ -271,16 +297,16 @@ paths:
               all_fields:
                 summary: Create user with all fields
                 value:
-                  username: "test001"
-                  email: "test001@test.com"
-                  display_name: "Test User 001"
-                  role: "Admin"
+                  username: 'test001'
+                  email: 'test001@test.com'
+                  display_name: 'Test User 001'
+                  role: 'Admin'
               minimal:
                 summary: Create user with minimal fields
                 value:
-                  username: "test002"
-                  email: "test002@test.com"
-                  role: "Maintainer"
+                  username: 'test002'
+                  email: 'test002@test.com'
+                  role: 'Maintainer'
       responses:
         '201':
           description: User account created successfully
@@ -293,9 +319,9 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/CreateUserAccountResponse' }
               example:
-                username: "test001"
-                user_id: "550e8400-e29b-41d4-a716-446655440000"
-        '400': 
+                username: 'test001'
+                user_id: '550e8400-e29b-41d4-a716-446655440000'
+        '400':
           description: Validation error
           content:
             application/json:
@@ -305,17 +331,17 @@ paths:
                   summary: Malformed JSON
                   value:
                     code: 400
-                    message: "Invalid payload"
+                    message: 'Invalid payload'
                 missing_email:
                   summary: Missing required field
                   value:
                     code: 400
-                    message: "Invalid email"
+                    message: 'Invalid email'
                 invalid_role:
                   summary: Invalid role value
                   value:
                     code: 400
-                    message: "Invalid role: GodMode"
+                    message: 'Invalid role: GodMode'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409':
           description: User already exists (username or email conflict)
@@ -566,7 +592,7 @@ paths:
         '500': { $ref: '#/components/responses/InternalError' }
 
   # --- NAMESPACES ---
-  /access/namespaces:
+  /registry/namespaces:
     get:
       tags: [Namespaces]
       summary: List and filter namespaces
@@ -576,9 +602,17 @@ paths:
       parameters:
         - $ref: '#/components/parameters/PageQuery'
         - $ref: '#/components/parameters/LimitQuery'
+        - $ref: '#/components/parameters/SortOrder'
+        - $ref: '#/components/parameters/SearchQuery'
         - name: sort_by
           in: query
-          schema: { type: string }
+          description: Sort field
+          schema:
+            type: string
+            default: name
+            enum:
+              - name
+              - created_at
         - name: order
           in: query
           schema: { type: string, enum: [asc, desc] }
@@ -631,7 +665,7 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/InternalError' }
 
-  /access/namespaces/{id}:
+  /registry/namespaces/{id}:
     head:
       tags: [Namespaces]
       summary: Check if namespace exists
@@ -656,7 +690,7 @@ paths:
           schema: { type: string }
       responses:
         '200':
-          description: "OK"
+          description: 'OK'
           content:
             application/json:
               schema: { $ref: '#/components/schemas/NamespaceResponse' }
@@ -691,7 +725,7 @@ paths:
       responses:
         '200': { description: Namespace deleted successfully }
 
-  /access/namespaces/{id}/visibility:
+  /registry/namespaces/{id}/visibility:
     patch:
       tags: [Namespaces]
       summary: Change namespace visibility
@@ -724,7 +758,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 code: 400
-                error_message: "Invalid query param"
+                error_message: 'Invalid query param'
 
         '404':
           description: Namespace not found
@@ -741,14 +775,13 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 code: 422
-                error_message: "Not allowed to change visibility of a namespace when it is in disabled state"
+                error_message: 'Not allowed to change visibility of a namespace when it is in disabled state'
 
         '401': { $ref: '#/components/responses/Unauthorized' }
 
         '500': { $ref: '#/components/responses/InternalError' }
 
-
-  /access/namespaces/{id}/state:
+  /registry/namespaces/{id}/state:
     patch:
       tags: [Namespaces]
       summary: Change namespace state
@@ -784,11 +817,11 @@ paths:
                 missing:
                   value:
                     code: 400
-                    error_message: "Missing query param state in request"
+                    error_message: 'Missing query param state in request'
                 invalid:
                   value:
                     code: 400
-                    error_message: "Invalid namespace state"
+                    error_message: 'Invalid namespace state'
 
         '404':
           description: Namespace not found
@@ -811,7 +844,7 @@ paths:
 
         '500': { $ref: '#/components/responses/InternalError' }
 
-  /access/namespaces/{id}/users:
+  /registry/namespaces/{id}/users:
     get:
       tags: [Namespaces]
       summary: List users with access to namespace
@@ -826,6 +859,8 @@ paths:
 
         - $ref: '#/components/parameters/PageQuery'
         - $ref: '#/components/parameters/LimitQuery'
+        - $ref: '#/components/parameters/SortOrder'
+        - $ref: '#/components/parameters/SearchQuery'
 
         - name: access_level
           in: query
@@ -839,10 +874,16 @@ paths:
           schema: { type: string }
           description: Search by username
 
-        - name: sort
+        - name: sort_by
           in: query
-          schema: { type: string }
-          description: Sort field (allowed fields defined in constants)
+          description: The field used to sort the results.
+          schema:
+            type: string
+            default: granted_at
+            enum:
+              - user
+              - granted_user
+              - granted_at
 
       responses:
         '200':
@@ -874,7 +915,7 @@ paths:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
 
         '500': { $ref: '#/components/responses/InternalError' }
-        
+
     post:
       tags: [Namespaces, Access]
       summary: Grant user access to namespace
@@ -925,7 +966,7 @@ paths:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
         '500': { $ref: '#/components/responses/InternalError' }
 
-  /access/namespaces/{id}/users/{userID}:
+  /registry/namespaces/{id}/users/{userID}:
     delete:
       tags: [Namespaces, Access]
       summary: Revoke user access from namespace
@@ -964,6 +1005,40 @@ paths:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
         '500': { $ref: '#/components/responses/InternalError' }
 
+  /registry/namespaces/check-name:
+      get:
+        tags: [Namespaces]
+        summary: Check namespace name availability
+        description: |
+          Verifies if a specific namespace name is available. 
+          Validation follows the regex: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+        parameters:
+          - name: name
+            in: query
+            required: true
+            description: The namespace name to validate
+            schema:
+              type: string
+              pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+        responses:
+          '200':
+            description: Check performed successfully
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    available:
+                      type: boolean
+                      description: True if the name is not taken and is valid.
+          '400':
+            description: Name does not match the required regex pattern
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/ErrorResponse'
+          '500':
+            $ref: '#/components/responses/InternalError'
 components:
   securitySchemes:
     cookieAuth:
@@ -972,67 +1047,80 @@ components:
       name: auth_token
 
   parameters:
-    PageQuery: 
+    PageQuery:
       name: page
       in: query
       schema: { type: integer, default: 1, minimum: 1 }
       description: Page number for pagination
-    
-    LimitQuery: 
+
+    LimitQuery:
       name: limit
       in: query
       schema: { type: integer, default: 10, minimum: 1, maximum: 100 }
       description: Number of items per page
-
+    SortOrder:
+      name: order
+      in: query
+      description: The direction in which to sort the results.
+      schema:
+        type: string
+        default: asc
+        enum:
+          - asc
+          - desc
+    SearchQuery:
+      name: search
+      in: query
+      schema: { type: string }
   responses:
     Unauthorized:
-      description: "Invalid, expired, or revoked session cookie."
+      description: 'Invalid, expired, or revoked session cookie.'
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
-    
+
     NotFound:
-      description: "Resource not found."
+      description: 'Resource not found.'
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
-    
+
     BadRequest:
-      description: "Malformed request or validation error."
+      description: 'Malformed request or validation error.'
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
-    
+
     InternalError:
-      description: "Internal server error."
+      description: 'Internal server error.'
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
 
     Forbidden:
-      description: "Access forbidden."
+      description: 'Access forbidden.'
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
 
     Conflict:
-      description: "Conflict with existing resource."
+      description: 'Conflict with existing resource.'
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/ErrorResponse' }   
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   schemas:
     PaginatedBase:
       type: object
       required: [total, page, limit]
       properties:
-        total: 
+        total:
           type: integer
           description: Total number of items
-        page: 
+        page:
           type: integer
           description: Current page number
-        limit: 
+        limit:
           type: integer
           description: Items per page
 
@@ -1040,10 +1128,10 @@ components:
       type: object
       required: [code, message]
       properties:
-        code: 
+        error_code:
           type: integer
           description: HTTP status code
-        message: 
+        error_message:
           type: string
           description: Error message
 
@@ -1052,134 +1140,134 @@ components:
       type: object
       required: [username, email, role]
       properties:
-        username: 
+        username:
           type: string
           description: Unique username (3-32 chars, alphanumeric with ._- allowed)
           pattern: '^[a-zA-Z0-9._-]{3,32}$'
           minLength: 3
           maxLength: 32
-          example: "john_doe"
-        email: 
+          example: 'john_doe'
+        email:
           type: string
           format: email
           description: User email address
-          example: "john.doe@example.com"
-        display_name: 
+          example: 'john.doe@example.com'
+        display_name:
           type: string
           description: Display name for the user
-          example: "John Doe"
-        role: 
+          example: 'John Doe'
+        role:
           type: string
           enum: [Admin, Maintainer, Developer, Guest]
           description: User role in the system
-          example: "Developer"
+          example: 'Developer'
 
     CreateUserAccountResponse:
       type: object
       required: [username, user_id]
       properties:
-        username: 
+        username:
           type: string
           description: Created username
-          example: "john_doe"
-        user_id: 
+          example: 'john_doe'
+        user_id:
           type: string
           description: Generated user ID (UUID)
-          example: "550e8400-e29b-41d4-a716-446655440000"
+          example: '550e8400-e29b-41d4-a716-446655440000'
 
     UpdateUserAccountRequest:
       type: object
       required: [display_name]
       properties:
-        display_name: 
+        display_name:
           type: string
           description: New display name (1-255 chars)
           minLength: 1
           maxLength: 255
-          example: "John R. Doe"
+          example: 'John R. Doe'
 
     UpdateUserEmailRequest:
       type: object
       required: [email]
       properties:
-        email: 
+        email:
           type: string
           format: email
           description: New email address
-          example: "john.new@example.com"
+          example: 'john.new@example.com'
 
     ChangeUserRoleRequest:
       type: object
       required: [role]
       properties:
-        role: 
+        role:
           type: string
           enum: [admin, maintainer, developer, guest]
           description: New role for the user
-          example: "maintainer"
+          example: 'maintainer'
 
     PasswordChangeRequest:
       type: object
       required: [user_id, password]
       properties:
-        user_id: 
+        user_id:
           type: string
           description: User ID (must match path parameter)
-          example: "550e8400-e29b-41d4-a716-446655440000"
-        recovery_id: 
+          example: '550e8400-e29b-41d4-a716-446655440000'
+        recovery_id:
           type: string
           description: Password recovery ID (for admin-initiated resets)
-          example: "recovery-uuid-123"
-        password: 
+          example: 'recovery-uuid-123'
+        password:
           type: string
           format: password
           description: |
             New password (12-64 chars, must contain uppercase, lowercase, digit, and symbol !@#$%^&*)
           minLength: 12
           maxLength: 64
-          example: "NewP@ssw0rd123!"
-        old_password: 
+          example: 'NewP@ssw0rd123!'
+        old_password:
           type: string
           format: password
           description: Current password (required for user-initiated changes)
-          example: "OldP@ssw0rd123!"
+          example: 'OldP@ssw0rd123!'
 
     ChangePasswordResponse:
       type: object
       required: [status, message]
       properties:
-        status: 
+        status:
           type: string
           enum: [success, failed]
           description: Status of password change operation
-          example: "success"
-        message: 
+          example: 'success'
+        message:
           type: string
           description: Detailed message about the result
-          example: "Password changed successfully."
+          example: 'Password changed successfully.'
 
     UsernameEmailValidationRequest:
       type: object
       properties:
-        username: 
+        username:
           type: string
           description: Username to validate (optional if email provided)
-          example: "potential_user"
-        email: 
+          example: 'potential_user'
+        email:
           type: string
           format: email
           description: Email to validate (optional if username provided)
-          example: "user@example.com"
+          example: 'user@example.com'
 
     UsernameEmailValidationResponse:
       type: object
       required: [username_available, email_available]
       properties:
-        username_available: 
+        username_available:
           type: boolean
           description: Whether the username is available
           example: true
-        email_available: 
+        email_available:
           type: boolean
           description: Whether the email is available
           example: false
@@ -1188,28 +1276,28 @@ components:
       type: object
       required: [id, username, email, role, created_at]
       properties:
-        id: 
+        id:
           type: string
           description: User ID
-          example: "550e8400-e29b-41d4-a716-446655440000"
-        username: 
+          example: '550e8400-e29b-41d4-a716-446655440000'
+        username:
           type: string
           description: Username
-          example: "john_doe"
-        email: 
+          example: 'john_doe'
+        email:
           type: string
           format: email
           description: Email address
-          example: "john.doe@example.com"
-        display_name: 
+          example: 'john.doe@example.com'
+        display_name:
           type: string
           description: Display name
-          example: "John Doe"
+          example: 'John Doe'
         locked:
           type: boolean
           description: Whether the account is locked
           example: false
-        locked_reason: 
+        locked_reason:
           type: integer
           description: Numeric code for lock reason
           example: 0
@@ -1217,22 +1305,22 @@ components:
           type: integer
           description: Number of failed login attempts
           example: 0
-        role: 
+        role:
           type: string
           description: User role
-          example: "Developer"
-        created_at: 
+          example: 'Developer'
+        created_at:
           type: string
           format: date-time
           description: Account creation timestamp
-          example: "2024-01-15T10:30:00Z"
-        updated_at: 
+          example: '2024-01-15T10:30:00Z'
+        updated_at:
           type: string
           format: date-time
           nullable: true
           description: Last update timestamp
-          example: "2024-01-20T14:45:00Z"
-        locked_at: 
+          example: '2024-01-20T14:45:00Z'
+        locked_at:
           type: string
           format: date-time
           nullable: true
@@ -1243,139 +1331,139 @@ components:
       type: object
       required: [id, username, email, locked, failed_attempts, created_at, role]
       properties:
-        id: 
+        id:
           type: string
           description: User ID
-          example: "550e8400-e29b-41d4-a716-446655440000"
-        username: 
+          example: '550e8400-e29b-41d4-a716-446655440000'
+        username:
           type: string
           description: Username
-          example: "john_doe"
-        email: 
+          example: 'john_doe'
+        email:
           type: string
           format: email
           description: Email address
-          example: "john.doe@example.com"
-        display_name: 
+          example: 'john.doe@example.com'
+        display_name:
           type: string
           description: Display name
-          example: "John Doe"
-        locked: 
+          example: 'John Doe'
+        locked:
           type: boolean
           description: Whether account is locked
           example: false
-        locked_reason: 
+        locked_reason:
           type: string
           description: Human-readable lock reason
-          example: "User Account locked due to multiple failed attempts."
-        locked_at: 
+          example: 'User Account locked due to multiple failed attempts.'
+        locked_at:
           type: string
           format: date-time
           nullable: true
           description: Lock timestamp
           example: null
-        failed_attempts: 
+        failed_attempts:
           type: integer
           description: Number of failed login attempts
           example: 2
-        password_recovery_id: 
+        password_recovery_id:
           type: string
           description: Active password recovery ID
-          example: "recovery-uuid-456"
-        password_recovery_reason: 
+          example: 'recovery-uuid-456'
+        password_recovery_reason:
           type: string
           description: Human-readable password recovery reason
-          example: "User forgot password."
-        password_recovery_at: 
+          example: 'User forgot password.'
+        password_recovery_at:
           type: string
           format: date-time
           nullable: true
           description: Password recovery creation time
-          example: "2024-01-18T09:00:00Z"
-        last_loggedin_at: 
+          example: '2024-01-18T09:00:00Z'
+        last_loggedin_at:
           type: string
           format: date-time
           nullable: true
           description: Last successful login
-          example: "2024-01-22T16:20:00Z"
-        created_at: 
+          example: '2024-01-22T16:20:00Z'
+        created_at:
           type: string
           format: date-time
           description: Account creation time
-          example: "2024-01-15T10:30:00Z"
-        updated_at: 
+          example: '2024-01-15T10:30:00Z'
+        updated_at:
           type: string
           format: date-time
           nullable: true
           description: Last update time
-          example: "2024-01-20T14:45:00Z"
-        role: 
+          example: '2024-01-20T14:45:00Z'
+        role:
           type: string
           description: User role
-          example: "Developer"
+          example: 'Developer'
 
     # --- ONBOARDING SCHEMAS ---
     UserAccountSetupInfoResponse:
       type: object
       required: [error_message, username, user_id, display_name, email, role]
       properties:
-        error_message: 
+        error_message:
           type: string
           description: Error message if setup info cannot be retrieved (empty on success)
-          example: ""
-        username: 
+          example: ''
+        username:
           type: string
           description: Username for the account
-          example: "new_user"
-        user_id: 
+          example: 'new_user'
+        user_id:
           type: string
           description: User ID
-          example: "550e8400-e29b-41d4-a716-446655440000"
-        display_name: 
+          example: '550e8400-e29b-41d4-a716-446655440000'
+        display_name:
           type: string
           description: Display name
-          example: "New User"
-        email: 
+          example: 'New User'
+        email:
           type: string
           format: email
           description: Email address
-          example: "new.user@example.com"
-        role: 
+          example: 'new.user@example.com'
+        role:
           type: string
           description: Assigned role
-          example: "Developer"
+          example: 'Developer'
 
     AccountSetupCompleteRequest:
       type: object
       required: [user_id, username, password, uuid]
       properties:
-        user_id: 
+        user_id:
           type: string
           description: User ID from setup info
-          example: "550e8400-e29b-41d4-a716-446655440000"
-        username: 
+          example: '550e8400-e29b-41d4-a716-446655440000'
+        username:
           type: string
           description: Username from setup info (3-32 chars)
           pattern: '^[a-zA-Z0-9._-]{3,32}$'
-          example: "new_user"
-        display_name: 
+          example: 'new_user'
+        display_name:
           type: string
           description: Optional display name
           maxLength: 255
-          example: "New User"
-        password: 
+          example: 'New User'
+        password:
           type: string
           format: password
           description: |
             New password (12-64 chars, must contain uppercase, lowercase, digit, and symbol !@#$%^&*)
           minLength: 12
           maxLength: 64
-          example: "SecureP@ss123!"
-        uuid: 
+          example: 'SecureP@ss123!'
+        uuid:
           type: string
           format: uuid
           description: Setup UUID (must match path parameter)
-          example: "setup-uuid-789"
+          example: 'setup-uuid-789'
 
     # --- ACCESS CONTROL SCHEMAS ---
     ResourceAccessViewDTO:
@@ -1444,54 +1532,54 @@ components:
       type: object
       required: [registry_id, id, name, state, is_public, purpose, created_at]
       properties:
-        registry_id: 
+        registry_id:
           type: string
           description: Registry ID
-          example: "registry-001"
-        id: 
+          example: 'registry-001'
+        id:
           type: string
           description: Namespace ID
-          example: "ns-550e8400"
-        name: 
+          example: 'ns-550e8400'
+        name:
           type: string
           description: Namespace name
-          example: "production"
-        description: 
+          example: 'production'
+        description:
           type: string
           description: Namespace description
-          example: "Production environment namespace"
-        state: 
+          example: 'Production environment namespace'
+        state:
           type: string
           description: Current state of namespace
-          example: "Active"
-        is_public: 
+          example: 'Active'
+        is_public:
           type: boolean
           description: Whether namespace is public
           example: false
         purpose:
           type: string
           enum: [Team, Project]
-        created_at: 
+        created_at:
           type: string
           format: date-time
           description: Creation timestamp
-          example: "2024-01-10T08:00:00Z"
-        updated_at: 
+          example: '2024-01-10T08:00:00Z'
+        updated_at:
           type: string
           format: date-time
           nullable: true
           description: Last update timestamp
-          example: "2024-01-15T10:30:00Z"
-        developers: 
+          example: '2024-01-15T10:30:00Z'
+        developers:
           type: array
           items: { type: string }
           description: List of developer user IDs
-          example: ["dev-user-1", "dev-user-2"]
-        maintainers: 
+          example: ['dev-user-1', 'dev-user-2']
+        maintainers:
           type: array
           items: { type: string }
           description: List of maintainer user IDs
-          example: ["maintainer-user-1"]
+          example: ['maintainer-user-1']
 
     CreateNamespaceRequest:
       type: object
@@ -1565,3 +1653,17 @@ components:
           type: string
           enum: [Guest, Developer, Maintainer]
         granted_by: { type: string }
+    # ---- AUTHENTICATION SCHEMAS ----
+    UserProfileInfo:
+      type: object
+      required:
+        - user_id
+        - username
+        - role
+      properties:
+        user_id:
+          type: string
+        username:
+          type: string
+        role:
+          type: string

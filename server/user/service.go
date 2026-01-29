@@ -323,7 +323,7 @@ func (svc *userService) unlockUserAccount(userId string) (*unlockResult, error) 
 		return res, nil
 	}
 
-	err = svc.store.Users().UnlockAccount(ctx, userId)
+	err = svc.store.Users().UnlockAccount(ctx, user.Username,  false)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occurred when unlocking user account: %s", userId)
 		return nil, err
@@ -447,7 +447,7 @@ func (svc *userService) completeAccountSetup(req *mgmt.AccountSetupCompleteReque
 		return err
 	}
 
-	err = svc.store.Users().UnlockAccount(ctx, req.Username)
+	err = svc.store.Users().UnlockAccount(ctx, req.Username, false)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occurred when unlocking user account during account setup: %s", req.UserId)
 		return err
