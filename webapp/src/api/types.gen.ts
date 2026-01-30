@@ -435,6 +435,13 @@ export type PageQuery = number;
  */
 export type LimitQuery = number;
 
+/**
+ * The direction in which to sort the results.
+ */
+export type SortOrder = 'asc' | 'desc';
+
+export type SearchQuery = string;
+
 export type PostAuthLoginData = {
     body: {
         username: string;
@@ -565,13 +572,22 @@ export type GetUsersData = {
          */
         limit?: number;
         /**
-         * Sort field (allowed fields defined in constants)
+         * The direction in which to sort the results.
          */
-        sort?: string;
+        order?: 'asc' | 'desc';
+        search?: string;
         /**
-         * Filter criteria in format field:operator:value
+         * Sort field.
          */
-        filter?: string;
+        sort_by?: 'username' | 'email' | 'role' | 'display_name' | 'last_loggedin_at';
+        /**
+         * Filter field role; Possible values are 'Admin', 'Developer', 'Maintainer', 'Guest'
+         */
+        role?: Array<'Admin' | 'Developer' | 'Maintainer' | 'Guest'>;
+        /**
+         * Filter user accounts by account state
+         */
+        locked?: boolean;
     };
     url: '/users';
 };
@@ -1026,7 +1042,7 @@ export type PutUsersByIdUnlockResponses = {
     200: unknown;
 };
 
-export type GetAccessNamespacesData = {
+export type GetRegistryNamespacesData = {
     body?: never;
     path?: never;
     query?: {
@@ -1038,16 +1054,19 @@ export type GetAccessNamespacesData = {
          * Number of items per page
          */
         limit?: number;
-        sort_by?: string;
         order?: 'asc' | 'desc';
         search?: string;
+        /**
+         * Sort field
+         */
+        sort_by?: 'name' | 'created_at';
         state?: 'Active' | 'Deprecated' | 'Disabled';
         purpose?: 'Team' | 'Project';
     };
-    url: '/access/namespaces';
+    url: '/registry/namespaces';
 };
 
-export type GetAccessNamespacesErrors = {
+export type GetRegistryNamespacesErrors = {
     /**
      * Malformed request or validation error.
      */
@@ -1062,9 +1081,9 @@ export type GetAccessNamespacesErrors = {
     500: ErrorResponse;
 };
 
-export type GetAccessNamespacesError = GetAccessNamespacesErrors[keyof GetAccessNamespacesErrors];
+export type GetRegistryNamespacesError = GetRegistryNamespacesErrors[keyof GetRegistryNamespacesErrors];
 
-export type GetAccessNamespacesResponses = {
+export type GetRegistryNamespacesResponses = {
     /**
      * List of namespaces retrieved successfully
      */
@@ -1073,16 +1092,16 @@ export type GetAccessNamespacesResponses = {
     };
 };
 
-export type GetAccessNamespacesResponse = GetAccessNamespacesResponses[keyof GetAccessNamespacesResponses];
+export type GetRegistryNamespacesResponse = GetRegistryNamespacesResponses[keyof GetRegistryNamespacesResponses];
 
-export type PostAccessNamespacesData = {
+export type PostRegistryNamespacesData = {
     body: CreateNamespaceRequest;
     path?: never;
     query?: never;
-    url: '/access/namespaces';
+    url: '/registry/namespaces';
 };
 
-export type PostAccessNamespacesErrors = {
+export type PostRegistryNamespacesErrors = {
     /**
      * Malformed request or validation error.
      */
@@ -1109,100 +1128,100 @@ export type PostAccessNamespacesErrors = {
     500: ErrorResponse;
 };
 
-export type PostAccessNamespacesError = PostAccessNamespacesErrors[keyof PostAccessNamespacesErrors];
+export type PostRegistryNamespacesError = PostRegistryNamespacesErrors[keyof PostRegistryNamespacesErrors];
 
-export type PostAccessNamespacesResponses = {
+export type PostRegistryNamespacesResponses = {
     /**
      * Namespace created successfully
      */
     201: CreateNamespaceResponse;
 };
 
-export type PostAccessNamespacesResponse = PostAccessNamespacesResponses[keyof PostAccessNamespacesResponses];
+export type PostRegistryNamespacesResponse = PostRegistryNamespacesResponses[keyof PostRegistryNamespacesResponses];
 
-export type DeleteAccessNamespacesByIdData = {
+export type DeleteRegistryNamespacesByIdData = {
     body?: never;
     path: {
         id: string;
     };
     query?: never;
-    url: '/access/namespaces/{id}';
+    url: '/registry/namespaces/{id}';
 };
 
-export type DeleteAccessNamespacesByIdResponses = {
+export type DeleteRegistryNamespacesByIdResponses = {
     /**
      * Namespace deleted successfully
      */
     200: unknown;
 };
 
-export type GetAccessNamespacesByIdData = {
+export type GetRegistryNamespacesByIdData = {
     body?: never;
     path: {
         id: string;
     };
     query?: never;
-    url: '/access/namespaces/{id}';
+    url: '/registry/namespaces/{id}';
 };
 
-export type GetAccessNamespacesByIdErrors = {
+export type GetRegistryNamespacesByIdErrors = {
     /**
      * Resource not found.
      */
     404: ErrorResponse;
 };
 
-export type GetAccessNamespacesByIdError = GetAccessNamespacesByIdErrors[keyof GetAccessNamespacesByIdErrors];
+export type GetRegistryNamespacesByIdError = GetRegistryNamespacesByIdErrors[keyof GetRegistryNamespacesByIdErrors];
 
-export type GetAccessNamespacesByIdResponses = {
+export type GetRegistryNamespacesByIdResponses = {
     /**
      * OK
      */
     200: NamespaceResponse;
 };
 
-export type GetAccessNamespacesByIdResponse = GetAccessNamespacesByIdResponses[keyof GetAccessNamespacesByIdResponses];
+export type GetRegistryNamespacesByIdResponse = GetRegistryNamespacesByIdResponses[keyof GetRegistryNamespacesByIdResponses];
 
-export type HeadAccessNamespacesByIdData = {
+export type HeadRegistryNamespacesByIdData = {
     body?: never;
     path: {
         id: string;
     };
     query?: never;
-    url: '/access/namespaces/{id}';
+    url: '/registry/namespaces/{id}';
 };
 
-export type HeadAccessNamespacesByIdErrors = {
+export type HeadRegistryNamespacesByIdErrors = {
     /**
      * Namespace not found
      */
     404: unknown;
 };
 
-export type HeadAccessNamespacesByIdResponses = {
+export type HeadRegistryNamespacesByIdResponses = {
     /**
      * Namespace exists
      */
     200: unknown;
 };
 
-export type PutAccessNamespacesByIdData = {
+export type PutRegistryNamespacesByIdData = {
     body: UpdateNamespaceRequest;
     path: {
         id: string;
     };
     query?: never;
-    url: '/access/namespaces/{id}';
+    url: '/registry/namespaces/{id}';
 };
 
-export type PutAccessNamespacesByIdResponses = {
+export type PutRegistryNamespacesByIdResponses = {
     /**
      * Namespace updated successfully
      */
     200: unknown;
 };
 
-export type PatchAccessNamespacesByIdVisibilityData = {
+export type PatchRegistryNamespacesByIdVisibilityData = {
     body?: never;
     path: {
         /**
@@ -1216,10 +1235,10 @@ export type PatchAccessNamespacesByIdVisibilityData = {
          */
         public: boolean;
     };
-    url: '/access/namespaces/{id}/visibility';
+    url: '/registry/namespaces/{id}/visibility';
 };
 
-export type PatchAccessNamespacesByIdVisibilityErrors = {
+export type PatchRegistryNamespacesByIdVisibilityErrors = {
     /**
      * Invalid query parameter
      */
@@ -1242,16 +1261,16 @@ export type PatchAccessNamespacesByIdVisibilityErrors = {
     500: ErrorResponse;
 };
 
-export type PatchAccessNamespacesByIdVisibilityError = PatchAccessNamespacesByIdVisibilityErrors[keyof PatchAccessNamespacesByIdVisibilityErrors];
+export type PatchRegistryNamespacesByIdVisibilityError = PatchRegistryNamespacesByIdVisibilityErrors[keyof PatchRegistryNamespacesByIdVisibilityErrors];
 
-export type PatchAccessNamespacesByIdVisibilityResponses = {
+export type PatchRegistryNamespacesByIdVisibilityResponses = {
     /**
      * Visibility changed successfully or no-op
      */
     200: unknown;
 };
 
-export type PatchAccessNamespacesByIdStateData = {
+export type PatchRegistryNamespacesByIdStateData = {
     body?: never;
     path: {
         /**
@@ -1265,10 +1284,10 @@ export type PatchAccessNamespacesByIdStateData = {
          */
         state: 'Active' | 'Deprecated' | 'Disabled';
     };
-    url: '/access/namespaces/{id}/state';
+    url: '/registry/namespaces/{id}/state';
 };
 
-export type PatchAccessNamespacesByIdStateErrors = {
+export type PatchRegistryNamespacesByIdStateErrors = {
     /**
      * Invalid or missing state query parameter
      */
@@ -1291,16 +1310,16 @@ export type PatchAccessNamespacesByIdStateErrors = {
     500: ErrorResponse;
 };
 
-export type PatchAccessNamespacesByIdStateError = PatchAccessNamespacesByIdStateErrors[keyof PatchAccessNamespacesByIdStateErrors];
+export type PatchRegistryNamespacesByIdStateError = PatchRegistryNamespacesByIdStateErrors[keyof PatchRegistryNamespacesByIdStateErrors];
 
-export type PatchAccessNamespacesByIdStateResponses = {
+export type PatchRegistryNamespacesByIdStateResponses = {
     /**
      * State changed successfully or no-op if same state
      */
     200: unknown;
 };
 
-export type GetAccessNamespacesByIdUsersData = {
+export type GetRegistryNamespacesByIdUsersData = {
     body?: never;
     path: {
         /**
@@ -1318,22 +1337,26 @@ export type GetAccessNamespacesByIdUsersData = {
          */
         limit?: number;
         /**
-         * Filter by access level
+         * The direction in which to sort the results.
          */
-        access_level?: 'Guest' | 'Developer' | 'Maintainer';
+        order?: 'asc' | 'desc';
         /**
          * Search by username
          */
         search?: string;
         /**
-         * Sort field (allowed fields defined in constants)
+         * Filter by access level
          */
-        sort?: string;
+        access_level?: 'Guest' | 'Developer' | 'Maintainer';
+        /**
+         * The field used to sort the results.
+         */
+        sort_by?: 'user' | 'granted_user' | 'granted_at';
     };
-    url: '/access/namespaces/{id}/users';
+    url: '/registry/namespaces/{id}/users';
 };
 
-export type GetAccessNamespacesByIdUsersErrors = {
+export type GetRegistryNamespacesByIdUsersErrors = {
     /**
      * Invalid filter or sort field
      */
@@ -1352,9 +1375,9 @@ export type GetAccessNamespacesByIdUsersErrors = {
     500: ErrorResponse;
 };
 
-export type GetAccessNamespacesByIdUsersError = GetAccessNamespacesByIdUsersErrors[keyof GetAccessNamespacesByIdUsersErrors];
+export type GetRegistryNamespacesByIdUsersError = GetRegistryNamespacesByIdUsersErrors[keyof GetRegistryNamespacesByIdUsersErrors];
 
-export type GetAccessNamespacesByIdUsersResponses = {
+export type GetRegistryNamespacesByIdUsersResponses = {
     /**
      * List of user accesses retrieved successfully
      */
@@ -1363,9 +1386,9 @@ export type GetAccessNamespacesByIdUsersResponses = {
     };
 };
 
-export type GetAccessNamespacesByIdUsersResponse = GetAccessNamespacesByIdUsersResponses[keyof GetAccessNamespacesByIdUsersResponses];
+export type GetRegistryNamespacesByIdUsersResponse = GetRegistryNamespacesByIdUsersResponses[keyof GetRegistryNamespacesByIdUsersResponses];
 
-export type PostAccessNamespacesByIdUsersData = {
+export type PostRegistryNamespacesByIdUsersData = {
     body: AccessGrantRequest;
     path: {
         /**
@@ -1374,10 +1397,10 @@ export type PostAccessNamespacesByIdUsersData = {
         id: string;
     };
     query?: never;
-    url: '/access/namespaces/{id}/users';
+    url: '/registry/namespaces/{id}/users';
 };
 
-export type PostAccessNamespacesByIdUsersErrors = {
+export type PostRegistryNamespacesByIdUsersErrors = {
     /**
      * Invalid request body, invalid resource_type, or validation failure
      */
@@ -1404,16 +1427,16 @@ export type PostAccessNamespacesByIdUsersErrors = {
     500: ErrorResponse;
 };
 
-export type PostAccessNamespacesByIdUsersError = PostAccessNamespacesByIdUsersErrors[keyof PostAccessNamespacesByIdUsersErrors];
+export type PostRegistryNamespacesByIdUsersError = PostRegistryNamespacesByIdUsersErrors[keyof PostRegistryNamespacesByIdUsersErrors];
 
-export type PostAccessNamespacesByIdUsersResponses = {
+export type PostRegistryNamespacesByIdUsersResponses = {
     /**
      * Access granted successfully
      */
     200: unknown;
 };
 
-export type DeleteAccessNamespacesByIdUsersByUserIdData = {
+export type DeleteRegistryNamespacesByIdUsersByUserIdData = {
     body?: never;
     path: {
         /**
@@ -1426,10 +1449,10 @@ export type DeleteAccessNamespacesByIdUsersByUserIdData = {
         userID: string;
     };
     query?: never;
-    url: '/access/namespaces/{id}/users/{userID}';
+    url: '/registry/namespaces/{id}/users/{userID}';
 };
 
-export type DeleteAccessNamespacesByIdUsersByUserIdErrors = {
+export type DeleteRegistryNamespacesByIdUsersByUserIdErrors = {
     /**
      * Invalid body or invalid resource_type
      */
@@ -1448,11 +1471,50 @@ export type DeleteAccessNamespacesByIdUsersByUserIdErrors = {
     500: ErrorResponse;
 };
 
-export type DeleteAccessNamespacesByIdUsersByUserIdError = DeleteAccessNamespacesByIdUsersByUserIdErrors[keyof DeleteAccessNamespacesByIdUsersByUserIdErrors];
+export type DeleteRegistryNamespacesByIdUsersByUserIdError = DeleteRegistryNamespacesByIdUsersByUserIdErrors[keyof DeleteRegistryNamespacesByIdUsersByUserIdErrors];
 
-export type DeleteAccessNamespacesByIdUsersByUserIdResponses = {
+export type DeleteRegistryNamespacesByIdUsersByUserIdResponses = {
     /**
      * Access revoked successfully
      */
     200: unknown;
 };
+
+export type GetRegistryNamespacesCheckNameData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The namespace name to validate
+         */
+        name: string;
+    };
+    url: '/registry/namespaces/check-name';
+};
+
+export type GetRegistryNamespacesCheckNameErrors = {
+    /**
+     * Name does not match the required regex pattern
+     */
+    400: ErrorResponse;
+    /**
+     * Internal server error.
+     */
+    500: ErrorResponse;
+};
+
+export type GetRegistryNamespacesCheckNameError = GetRegistryNamespacesCheckNameErrors[keyof GetRegistryNamespacesCheckNameErrors];
+
+export type GetRegistryNamespacesCheckNameResponses = {
+    /**
+     * Check performed successfully
+     */
+    200: {
+        /**
+         * True if the name is not taken and is valid.
+         */
+        available?: boolean;
+    };
+};
+
+export type GetRegistryNamespacesCheckNameResponse = GetRegistryNamespacesCheckNameResponses[keyof GetRegistryNamespacesCheckNameResponses];

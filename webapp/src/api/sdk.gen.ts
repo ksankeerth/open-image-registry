@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { DeleteAccessNamespacesByIdData, DeleteAccessNamespacesByIdResponses, DeleteAccessNamespacesByIdUsersByUserIdData, DeleteAccessNamespacesByIdUsersByUserIdErrors, DeleteAccessNamespacesByIdUsersByUserIdResponses, DeleteUsersByIdData, DeleteUsersByIdErrors, DeleteUsersByIdResponses, GetAccessNamespacesByIdData, GetAccessNamespacesByIdErrors, GetAccessNamespacesByIdResponses, GetAccessNamespacesByIdUsersData, GetAccessNamespacesByIdUsersErrors, GetAccessNamespacesByIdUsersResponses, GetAccessNamespacesData, GetAccessNamespacesErrors, GetAccessNamespacesResponses, GetOnboardingByUuidData, GetOnboardingByUuidErrors, GetOnboardingByUuidResponses, GetUsersByIdData, GetUsersByIdErrors, GetUsersByIdResponses, GetUsersData, GetUsersErrors, GetUsersMeData, GetUsersMeErrors, GetUsersMeResponses, GetUsersResponses, HeadAccessNamespacesByIdData, HeadAccessNamespacesByIdErrors, HeadAccessNamespacesByIdResponses, PatchAccessNamespacesByIdStateData, PatchAccessNamespacesByIdStateErrors, PatchAccessNamespacesByIdStateResponses, PatchAccessNamespacesByIdVisibilityData, PatchAccessNamespacesByIdVisibilityErrors, PatchAccessNamespacesByIdVisibilityResponses, PostAccessNamespacesByIdUsersData, PostAccessNamespacesByIdUsersErrors, PostAccessNamespacesByIdUsersResponses, PostAccessNamespacesData, PostAccessNamespacesErrors, PostAccessNamespacesResponses, PostAuthLoginData, PostAuthLoginErrors, PostAuthLoginResponses, PostAuthLogoutData, PostAuthLogoutErrors, PostAuthLogoutResponses, PostOnboardingByUuidCompleteData, PostOnboardingByUuidCompleteErrors, PostOnboardingByUuidCompleteResponses, PostUsersData, PostUsersErrors, PostUsersResponses, PostUsersValidateData, PostUsersValidateErrors, PostUsersValidateResponses, PutAccessNamespacesByIdData, PutAccessNamespacesByIdResponses, PutUsersByIdData, PutUsersByIdEmailData, PutUsersByIdEmailErrors, PutUsersByIdEmailResponses, PutUsersByIdErrors, PutUsersByIdLockData, PutUsersByIdLockErrors, PutUsersByIdLockResponses, PutUsersByIdPasswordData, PutUsersByIdPasswordErrors, PutUsersByIdPasswordResponses, PutUsersByIdResponses, PutUsersByIdRoleData, PutUsersByIdRoleErrors, PutUsersByIdRoleResponses, PutUsersByIdUnlockData, PutUsersByIdUnlockErrors, PutUsersByIdUnlockResponses, PutUsersMeData, PutUsersMeErrors, PutUsersMeResponses } from './types.gen';
+import type { DeleteRegistryNamespacesByIdData, DeleteRegistryNamespacesByIdResponses, DeleteRegistryNamespacesByIdUsersByUserIdData, DeleteRegistryNamespacesByIdUsersByUserIdErrors, DeleteRegistryNamespacesByIdUsersByUserIdResponses, DeleteUsersByIdData, DeleteUsersByIdErrors, DeleteUsersByIdResponses, GetOnboardingByUuidData, GetOnboardingByUuidErrors, GetOnboardingByUuidResponses, GetRegistryNamespacesByIdData, GetRegistryNamespacesByIdErrors, GetRegistryNamespacesByIdResponses, GetRegistryNamespacesByIdUsersData, GetRegistryNamespacesByIdUsersErrors, GetRegistryNamespacesByIdUsersResponses, GetRegistryNamespacesCheckNameData, GetRegistryNamespacesCheckNameErrors, GetRegistryNamespacesCheckNameResponses, GetRegistryNamespacesData, GetRegistryNamespacesErrors, GetRegistryNamespacesResponses, GetUsersByIdData, GetUsersByIdErrors, GetUsersByIdResponses, GetUsersData, GetUsersErrors, GetUsersMeData, GetUsersMeErrors, GetUsersMeResponses, GetUsersResponses, HeadRegistryNamespacesByIdData, HeadRegistryNamespacesByIdErrors, HeadRegistryNamespacesByIdResponses, PatchRegistryNamespacesByIdStateData, PatchRegistryNamespacesByIdStateErrors, PatchRegistryNamespacesByIdStateResponses, PatchRegistryNamespacesByIdVisibilityData, PatchRegistryNamespacesByIdVisibilityErrors, PatchRegistryNamespacesByIdVisibilityResponses, PostAuthLoginData, PostAuthLoginErrors, PostAuthLoginResponses, PostAuthLogoutData, PostAuthLogoutErrors, PostAuthLogoutResponses, PostOnboardingByUuidCompleteData, PostOnboardingByUuidCompleteErrors, PostOnboardingByUuidCompleteResponses, PostRegistryNamespacesByIdUsersData, PostRegistryNamespacesByIdUsersErrors, PostRegistryNamespacesByIdUsersResponses, PostRegistryNamespacesData, PostRegistryNamespacesErrors, PostRegistryNamespacesResponses, PostUsersData, PostUsersErrors, PostUsersResponses, PostUsersValidateData, PostUsersValidateErrors, PostUsersValidateResponses, PutRegistryNamespacesByIdData, PutRegistryNamespacesByIdResponses, PutUsersByIdData, PutUsersByIdEmailData, PutUsersByIdEmailErrors, PutUsersByIdEmailResponses, PutUsersByIdErrors, PutUsersByIdLockData, PutUsersByIdLockErrors, PutUsersByIdLockResponses, PutUsersByIdPasswordData, PutUsersByIdPasswordErrors, PutUsersByIdPasswordResponses, PutUsersByIdResponses, PutUsersByIdRoleData, PutUsersByIdRoleErrors, PutUsersByIdRoleResponses, PutUsersByIdUnlockData, PutUsersByIdUnlockErrors, PutUsersByIdUnlockResponses, PutUsersMeData, PutUsersMeErrors, PutUsersMeResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean> = Options2<TData, ThrowOnError> & {
     /**
@@ -338,26 +338,26 @@ export const putUsersByIdUnlock = <ThrowOnError extends boolean = false>(options
  * Retrieve a paginated list of registry namespaces with optional filtering, sorting, and searching.
  *
  */
-export const getAccessNamespaces = <ThrowOnError extends boolean = false>(options?: Options<GetAccessNamespacesData, ThrowOnError>) => (options?.client ?? client).get<GetAccessNamespacesResponses, GetAccessNamespacesErrors, ThrowOnError>({
+export const getRegistryNamespaces = <ThrowOnError extends boolean = false>(options?: Options<GetRegistryNamespacesData, ThrowOnError>) => (options?.client ?? client).get<GetRegistryNamespacesResponses, GetRegistryNamespacesErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'auth_token',
             type: 'apiKey'
         }],
-    url: '/access/namespaces',
+    url: '/registry/namespaces',
     ...options
 });
 
 /**
  * Create a new namespace
  */
-export const postAccessNamespaces = <ThrowOnError extends boolean = false>(options: Options<PostAccessNamespacesData, ThrowOnError>) => (options.client ?? client).post<PostAccessNamespacesResponses, PostAccessNamespacesErrors, ThrowOnError>({
+export const postRegistryNamespaces = <ThrowOnError extends boolean = false>(options: Options<PostRegistryNamespacesData, ThrowOnError>) => (options.client ?? client).post<PostRegistryNamespacesResponses, PostRegistryNamespacesErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'auth_token',
             type: 'apiKey'
         }],
-    url: '/access/namespaces',
+    url: '/registry/namespaces',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -368,52 +368,52 @@ export const postAccessNamespaces = <ThrowOnError extends boolean = false>(optio
 /**
  * Delete namespace
  */
-export const deleteAccessNamespacesById = <ThrowOnError extends boolean = false>(options: Options<DeleteAccessNamespacesByIdData, ThrowOnError>) => (options.client ?? client).delete<DeleteAccessNamespacesByIdResponses, unknown, ThrowOnError>({
+export const deleteRegistryNamespacesById = <ThrowOnError extends boolean = false>(options: Options<DeleteRegistryNamespacesByIdData, ThrowOnError>) => (options.client ?? client).delete<DeleteRegistryNamespacesByIdResponses, unknown, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'auth_token',
             type: 'apiKey'
         }],
-    url: '/access/namespaces/{id}',
+    url: '/registry/namespaces/{id}',
     ...options
 });
 
 /**
  * Get namespace details
  */
-export const getAccessNamespacesById = <ThrowOnError extends boolean = false>(options: Options<GetAccessNamespacesByIdData, ThrowOnError>) => (options.client ?? client).get<GetAccessNamespacesByIdResponses, GetAccessNamespacesByIdErrors, ThrowOnError>({
+export const getRegistryNamespacesById = <ThrowOnError extends boolean = false>(options: Options<GetRegistryNamespacesByIdData, ThrowOnError>) => (options.client ?? client).get<GetRegistryNamespacesByIdResponses, GetRegistryNamespacesByIdErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'auth_token',
             type: 'apiKey'
         }],
-    url: '/access/namespaces/{id}',
+    url: '/registry/namespaces/{id}',
     ...options
 });
 
 /**
  * Check if namespace exists
  */
-export const headAccessNamespacesById = <ThrowOnError extends boolean = false>(options: Options<HeadAccessNamespacesByIdData, ThrowOnError>) => (options.client ?? client).head<HeadAccessNamespacesByIdResponses, HeadAccessNamespacesByIdErrors, ThrowOnError>({
+export const headRegistryNamespacesById = <ThrowOnError extends boolean = false>(options: Options<HeadRegistryNamespacesByIdData, ThrowOnError>) => (options.client ?? client).head<HeadRegistryNamespacesByIdResponses, HeadRegistryNamespacesByIdErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'auth_token',
             type: 'apiKey'
         }],
-    url: '/access/namespaces/{id}',
+    url: '/registry/namespaces/{id}',
     ...options
 });
 
 /**
  * Update namespace
  */
-export const putAccessNamespacesById = <ThrowOnError extends boolean = false>(options: Options<PutAccessNamespacesByIdData, ThrowOnError>) => (options.client ?? client).put<PutAccessNamespacesByIdResponses, unknown, ThrowOnError>({
+export const putRegistryNamespacesById = <ThrowOnError extends boolean = false>(options: Options<PutRegistryNamespacesByIdData, ThrowOnError>) => (options.client ?? client).put<PutRegistryNamespacesByIdResponses, unknown, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'auth_token',
             type: 'apiKey'
         }],
-    url: '/access/namespaces/{id}',
+    url: '/registry/namespaces/{id}',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -426,13 +426,13 @@ export const putAccessNamespacesById = <ThrowOnError extends boolean = false>(op
  *
  * Change whether a namespace is public or private.
  */
-export const patchAccessNamespacesByIdVisibility = <ThrowOnError extends boolean = false>(options: Options<PatchAccessNamespacesByIdVisibilityData, ThrowOnError>) => (options.client ?? client).patch<PatchAccessNamespacesByIdVisibilityResponses, PatchAccessNamespacesByIdVisibilityErrors, ThrowOnError>({
+export const patchRegistryNamespacesByIdVisibility = <ThrowOnError extends boolean = false>(options: Options<PatchRegistryNamespacesByIdVisibilityData, ThrowOnError>) => (options.client ?? client).patch<PatchRegistryNamespacesByIdVisibilityResponses, PatchRegistryNamespacesByIdVisibilityErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'auth_token',
             type: 'apiKey'
         }],
-    url: '/access/namespaces/{id}/visibility',
+    url: '/registry/namespaces/{id}/visibility',
     ...options
 });
 
@@ -441,13 +441,13 @@ export const patchAccessNamespacesByIdVisibility = <ThrowOnError extends boolean
  *
  * Change the lifecycle state of a namespace.
  */
-export const patchAccessNamespacesByIdState = <ThrowOnError extends boolean = false>(options: Options<PatchAccessNamespacesByIdStateData, ThrowOnError>) => (options.client ?? client).patch<PatchAccessNamespacesByIdStateResponses, PatchAccessNamespacesByIdStateErrors, ThrowOnError>({
+export const patchRegistryNamespacesByIdState = <ThrowOnError extends boolean = false>(options: Options<PatchRegistryNamespacesByIdStateData, ThrowOnError>) => (options.client ?? client).patch<PatchRegistryNamespacesByIdStateResponses, PatchRegistryNamespacesByIdStateErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'auth_token',
             type: 'apiKey'
         }],
-    url: '/access/namespaces/{id}/state',
+    url: '/registry/namespaces/{id}/state',
     ...options
 });
 
@@ -456,13 +456,13 @@ export const patchAccessNamespacesByIdState = <ThrowOnError extends boolean = fa
  *
  * Retrieve a paginated list of users who have access to the namespace.
  */
-export const getAccessNamespacesByIdUsers = <ThrowOnError extends boolean = false>(options: Options<GetAccessNamespacesByIdUsersData, ThrowOnError>) => (options.client ?? client).get<GetAccessNamespacesByIdUsersResponses, GetAccessNamespacesByIdUsersErrors, ThrowOnError>({
+export const getRegistryNamespacesByIdUsers = <ThrowOnError extends boolean = false>(options: Options<GetRegistryNamespacesByIdUsersData, ThrowOnError>) => (options.client ?? client).get<GetRegistryNamespacesByIdUsersResponses, GetRegistryNamespacesByIdUsersErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'auth_token',
             type: 'apiKey'
         }],
-    url: '/access/namespaces/{id}/users',
+    url: '/registry/namespaces/{id}/users',
     ...options
 });
 
@@ -478,13 +478,13 @@ export const getAccessNamespacesByIdUsers = <ThrowOnError extends boolean = fals
  * - Existing access cannot be overwritten
  *
  */
-export const postAccessNamespacesByIdUsers = <ThrowOnError extends boolean = false>(options: Options<PostAccessNamespacesByIdUsersData, ThrowOnError>) => (options.client ?? client).post<PostAccessNamespacesByIdUsersResponses, PostAccessNamespacesByIdUsersErrors, ThrowOnError>({
+export const postRegistryNamespacesByIdUsers = <ThrowOnError extends boolean = false>(options: Options<PostRegistryNamespacesByIdUsersData, ThrowOnError>) => (options.client ?? client).post<PostRegistryNamespacesByIdUsersResponses, PostRegistryNamespacesByIdUsersErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'auth_token',
             type: 'apiKey'
         }],
-    url: '/access/namespaces/{id}/users',
+    url: '/registry/namespaces/{id}/users',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -503,12 +503,21 @@ export const postAccessNamespacesByIdUsers = <ThrowOnError extends boolean = fal
  * - userID path is routing only, validation is done from body
  *
  */
-export const deleteAccessNamespacesByIdUsersByUserId = <ThrowOnError extends boolean = false>(options: Options<DeleteAccessNamespacesByIdUsersByUserIdData, ThrowOnError>) => (options.client ?? client).delete<DeleteAccessNamespacesByIdUsersByUserIdResponses, DeleteAccessNamespacesByIdUsersByUserIdErrors, ThrowOnError>({
+export const deleteRegistryNamespacesByIdUsersByUserId = <ThrowOnError extends boolean = false>(options: Options<DeleteRegistryNamespacesByIdUsersByUserIdData, ThrowOnError>) => (options.client ?? client).delete<DeleteRegistryNamespacesByIdUsersByUserIdResponses, DeleteRegistryNamespacesByIdUsersByUserIdErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'auth_token',
             type: 'apiKey'
         }],
-    url: '/access/namespaces/{id}/users/{userID}',
+    url: '/registry/namespaces/{id}/users/{userID}',
     ...options
 });
+
+/**
+ * Check namespace name availability
+ *
+ * Verifies if a specific namespace name is available.
+ * Validation follows the regex: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+ *
+ */
+export const getRegistryNamespacesCheckName = <ThrowOnError extends boolean = false>(options: Options<GetRegistryNamespacesCheckNameData, ThrowOnError>) => (options.client ?? client).get<GetRegistryNamespacesCheckNameResponses, GetRegistryNamespacesCheckNameErrors, ThrowOnError>({ url: '/registry/namespaces/check-name', ...options });
