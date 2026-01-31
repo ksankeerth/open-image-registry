@@ -1,106 +1,106 @@
-import { PostUpstreamRequestBody } from "../types/request_response";
+import { PostUpstreamRequestBody } from '../types/request_response';
 
 export const CleanupPolicyOptions = [
   {
-    short_name: "LRU 1 month",
-    name: "Least Recently Used (1 Month)",
-    code: "lru_1m",
+    short_name: 'LRU 1 month',
+    name: 'Least Recently Used (1 Month)',
+    code: 'lru_1m',
   },
   {
-    short_name: "LRU 3 months",
-    name: "Least Recently Used (3 Months)",
-    code: "lru_3m",
+    short_name: 'LRU 3 months',
+    name: 'Least Recently Used (3 Months)',
+    code: 'lru_3m',
   },
   {
-    short_name: "Least Pulled",
-    name: "Least Pulled",
-    code: "lp",
+    short_name: 'Least Pulled',
+    name: 'Least Pulled',
+    code: 'lp',
   },
 ];
 
 export const AuthTypeOptions = [
   {
-    short_name: "Anonymous",
-    name: "Anonymous",
-    code: "anonymous",
+    short_name: 'Anonymous',
+    name: 'Anonymous',
+    code: 'anonymous',
   },
   {
-    short_name: "Basic Auth",
-    name: "Basic Authentication",
-    code: "basic",
+    short_name: 'Basic Auth',
+    name: 'Basic Authentication',
+    code: 'basic',
   },
   {
-    short_name: "Bearer",
-    name: "Bearer",
-    code: "bearer",
+    short_name: 'Bearer',
+    name: 'Bearer',
+    code: 'bearer',
   },
 ];
 
 export const UpstreamRegTemplateOptions = [
   {
-    name: "Docker Hub",
-    short_name: "dockerhub",
-    code: "docker-hub",
+    name: 'Docker Hub',
+    short_name: 'dockerhub',
+    code: 'docker-hub',
   },
   {
-    name: "GitHub Container Registry",
-    short_name: "ghcr",
-    code: "github-ghcr",
+    name: 'GitHub Container Registry',
+    short_name: 'ghcr',
+    code: 'github-ghcr',
   },
   {
-    name: "GitLab Container Registry",
-    short_name: "gitlab",
-    code: "gitlab",
+    name: 'GitLab Container Registry',
+    short_name: 'gitlab',
+    code: 'gitlab',
   },
   {
-    name: "Amazon Elastic Container Registry",
-    short_name: "ecr",
-    code: "aws-ecr",
+    name: 'Amazon Elastic Container Registry',
+    short_name: 'ecr',
+    code: 'aws-ecr',
   },
   {
-    name: "Google Artifact Registry",
-    short_name: "gcr",
-    code: "google-artifact",
+    name: 'Google Artifact Registry',
+    short_name: 'gcr',
+    code: 'google-artifact',
   },
   {
-    name: "Azure Container Registry",
-    short_name: "acr",
-    code: "azure-acr",
+    name: 'Azure Container Registry',
+    short_name: 'acr',
+    code: 'azure-acr',
   },
   {
-    name: "Harbor",
-    short_name: "harbor",
-    code: "harbor",
+    name: 'Harbor',
+    short_name: 'harbor',
+    code: 'harbor',
   },
   {
-    name: "Quay.io",
-    short_name: "quay",
-    code: "quay-io",
+    name: 'Quay.io',
+    short_name: 'quay',
+    code: 'quay-io',
   },
   {
-    name: "JFrog Artifactory",
-    short_name: "jfrog",
-    code: "jfrog-artifactory",
+    name: 'JFrog Artifactory',
+    short_name: 'jfrog',
+    code: 'jfrog-artifactory',
   },
   {
-    name: "Nexus Repository",
-    short_name: "nexus",
-    code: "sonatype-nexus",
+    name: 'Nexus Repository',
+    short_name: 'nexus',
+    code: 'sonatype-nexus',
   },
   {
-    name: "Other",
-    short_name: "other",
-    code: "other",
+    name: 'Other',
+    short_name: 'other',
+    code: 'other',
   },
 ];
 
 export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
-  "docker-hub": {
-    name: "Docker Hub",
+  'docker-hub': {
+    name: 'Docker Hub',
     port: 5000,
-    upstream_url: "https://registry-1.docker.io",
+    upstream_url: 'https://registry-1.docker.io',
     auth_config: {
-      auth_type: "anonymous",
+      auth_type: 'anonymous',
       credentials_json: null,
     },
     access_config: {
@@ -113,7 +113,7 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
     storage_config: {
       storage_limit: 1024,
-      cleanup_policy: "lru_1m",
+      cleanup_policy: 'lru_1m',
       cleanup_threshold: 80,
     },
     cache_config: {
@@ -122,15 +122,15 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
   },
 
-  "github-ghcr": {
-    name: "GitHub Container Registry",
+  'github-ghcr': {
+    name: 'GitHub Container Registry',
     port: 5001,
-    upstream_url: "https://ghcr.io",
+    upstream_url: 'https://ghcr.io',
     auth_config: {
-      auth_type: "bearer",
+      auth_type: 'bearer',
       credentials_json: {
-        username: "<your-github-username>",
-        token: "<your-personal-access-token>",
+        username: '<your-github-username>',
+        token: '<your-personal-access-token>',
       },
     },
     access_config: {
@@ -143,7 +143,7 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
     storage_config: {
       storage_limit: 2048,
-      cleanup_policy: "lru_1m",
+      cleanup_policy: 'lru_1m',
       cleanup_threshold: 85,
     },
     cache_config: {
@@ -152,13 +152,13 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
   },
   gitlab: {
-    name: "GitLab Container Registry",
+    name: 'GitLab Container Registry',
     port: 5002,
-    upstream_url: "https://registry.gitlab.com",
+    upstream_url: 'https://registry.gitlab.com',
     auth_config: {
-      auth_type: "bearer",
+      auth_type: 'bearer',
       credentials_json: {
-        token: "<your-gitlab-token>",
+        token: '<your-gitlab-token>',
       },
     },
     access_config: {
@@ -171,7 +171,7 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
     storage_config: {
       storage_limit: 2048,
-      cleanup_policy: "lru_1m",
+      cleanup_policy: 'lru_1m',
       cleanup_threshold: 85,
     },
     cache_config: {
@@ -180,16 +180,16 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
   },
 
-  "aws-ecr": {
-    name: "Amazon ECR",
+  'aws-ecr': {
+    name: 'Amazon ECR',
     port: 5003,
-    upstream_url: "<https://<account>.dkr.ecr.<region>.amazonaws.com>",
+    upstream_url: '<https://<account>.dkr.ecr.<region>.amazonaws.com>',
     auth_config: {
-      auth_type: "bearer",
+      auth_type: 'bearer',
       credentials_json: {
-        access_key_id: "<AWS_ACCESS_KEY_ID>",
-        secret_access_key: "<AWS_SECRET_ACCESS_KEY>",
-        region: "<region>",
+        access_key_id: '<AWS_ACCESS_KEY_ID>',
+        secret_access_key: '<AWS_SECRET_ACCESS_KEY>',
+        region: '<region>',
       },
     },
     access_config: {
@@ -202,7 +202,7 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
     storage_config: {
       storage_limit: 2048,
-      cleanup_policy: "lru_1m",
+      cleanup_policy: 'lru_1m',
       cleanup_threshold: 85,
     },
     cache_config: {
@@ -211,14 +211,14 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
   },
 
-  "google-artifact": {
-    name: "Google Artifact Registry",
+  'google-artifact': {
+    name: 'Google Artifact Registry',
     port: 5004,
-    upstream_url: "<https://<region>-docker.pkg.dev>",
+    upstream_url: '<https://<region>-docker.pkg.dev>',
     auth_config: {
-      auth_type: "bearer",
+      auth_type: 'bearer',
       credentials_json: {
-        service_account_json: "<your-service-account-json>",
+        service_account_json: '<your-service-account-json>',
       },
     },
     access_config: {
@@ -231,7 +231,7 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
     storage_config: {
       storage_limit: 2048,
-      cleanup_policy: "lru_1m",
+      cleanup_policy: 'lru_1m',
       cleanup_threshold: 85,
     },
     cache_config: {
@@ -240,15 +240,15 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
   },
 
-  "azure-acr": {
-    name: "Azure Container Registry",
+  'azure-acr': {
+    name: 'Azure Container Registry',
     port: 5005,
-    upstream_url: "<https://<your-registry>.azurecr.io>",
+    upstream_url: '<https://<your-registry>.azurecr.io>',
     auth_config: {
-      auth_type: "bearer",
+      auth_type: 'bearer',
       credentials_json: {
-        username: "<your-acr-username>",
-        password: "<your-acr-password-or-token>",
+        username: '<your-acr-username>',
+        password: '<your-acr-password-or-token>',
       },
     },
     access_config: {
@@ -261,7 +261,7 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
     storage_config: {
       storage_limit: 2048,
-      cleanup_policy: "lru_1m",
+      cleanup_policy: 'lru_1m',
       cleanup_threshold: 85,
     },
     cache_config: {
@@ -271,14 +271,14 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
   },
 
   harbor: {
-    name: "Harbor",
+    name: 'Harbor',
     port: 5006,
-    upstream_url: "<https://your-harbor-instance.com>",
+    upstream_url: '<https://your-harbor-instance.com>',
     auth_config: {
-      auth_type: "basic",
+      auth_type: 'basic',
       credentials_json: {
-        username: "<your-username>",
-        password: "<your-password>",
+        username: '<your-username>',
+        password: '<your-password>',
       },
     },
     access_config: {
@@ -291,7 +291,7 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
     storage_config: {
       storage_limit: 1024,
-      cleanup_policy: "lru_1m",
+      cleanup_policy: 'lru_1m',
       cleanup_threshold: 80,
     },
     cache_config: {
@@ -300,14 +300,14 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
   },
 
-  "quay-io": {
-    name: "Quay.io",
+  'quay-io': {
+    name: 'Quay.io',
     port: 5007,
-    upstream_url: "https://quay.io",
+    upstream_url: 'https://quay.io',
     auth_config: {
-      auth_type: "bearer",
+      auth_type: 'bearer',
       credentials_json: {
-        token: "<your-quay-token>",
+        token: '<your-quay-token>',
       },
     },
     access_config: {
@@ -320,7 +320,7 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
     storage_config: {
       storage_limit: 1024,
-      cleanup_policy: "lru_1m",
+      cleanup_policy: 'lru_1m',
       cleanup_threshold: 80,
     },
     cache_config: {
@@ -329,16 +329,15 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
   },
 
-  "jfrog-artifactory": {
-    name: "JFrog Artifactory",
+  'jfrog-artifactory': {
+    name: 'JFrog Artifactory',
     port: 5008,
-    upstream_url:
-      "<https://<your-domain>.jfrog.io/artifactory/api/docker/<repo-name>/",
+    upstream_url: '<https://<your-domain>.jfrog.io/artifactory/api/docker/<repo-name>/',
     auth_config: {
-      auth_type: "basic",
+      auth_type: 'basic',
       credentials_json: {
-        username: "<your-username>",
-        password: "<your-password>",
+        username: '<your-username>',
+        password: '<your-password>',
       },
     },
     access_config: {
@@ -351,7 +350,7 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
     storage_config: {
       storage_limit: 2048,
-      cleanup_policy: "lru_1m",
+      cleanup_policy: 'lru_1m',
       cleanup_threshold: 85,
     },
     cache_config: {
@@ -360,15 +359,15 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
   },
 
-  "sonatype-nexus": {
-    name: "Nexus Repository",
+  'sonatype-nexus': {
+    name: 'Nexus Repository',
     port: 5009,
-    upstream_url: "<https://your-nexus-host/repository/<repo-name>/",
+    upstream_url: '<https://your-nexus-host/repository/<repo-name>/',
     auth_config: {
-      auth_type: "basic",
+      auth_type: 'basic',
       credentials_json: {
-        username: "<your-username>",
-        password: "<your-password>",
+        username: '<your-username>',
+        password: '<your-password>',
       },
     },
     access_config: {
@@ -381,7 +380,7 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
     storage_config: {
       storage_limit: 2048,
-      cleanup_policy: "lru_1m",
+      cleanup_policy: 'lru_1m',
       cleanup_threshold: 85,
     },
     cache_config: {
@@ -391,11 +390,11 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
   },
 
   other: {
-    name: "Other",
+    name: 'Other',
     port: 5010,
-    upstream_url: "https://",
+    upstream_url: 'https://',
     auth_config: {
-      auth_type: "anonymous",
+      auth_type: 'anonymous',
       credentials_json: null,
     },
     access_config: {
@@ -408,7 +407,7 @@ export const UpstreamTemplates: Record<string, PostUpstreamRequestBody> = {
     },
     storage_config: {
       storage_limit: 1024,
-      cleanup_policy: "lru_1m",
+      cleanup_policy: 'lru_1m',
       cleanup_threshold: 80,
     },
     cache_config: {

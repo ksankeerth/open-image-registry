@@ -1,9 +1,9 @@
-import { MenuItem } from "../types/app_types";
+import { MenuEntity } from '../types/app_types';
 
-export const flattenMenus = (menus: MenuItem[]): MenuItem[] => {
-  const result: MenuItem[] = [];
+export const flattenMenus = (menus: MenuEntity[]): MenuEntity[] => {
+  const result: MenuEntity[] = [];
 
-  const walk = (items: MenuItem[]) => {
+  const walk = (items: MenuEntity[]) => {
     for (const item of items) {
       result.push(item);
       if (item.children && item.children.length > 0) {
@@ -14,4 +14,4 @@ export const flattenMenus = (menus: MenuItem[]): MenuItem[] => {
 
   walk(menus);
   return result;
-}
+};

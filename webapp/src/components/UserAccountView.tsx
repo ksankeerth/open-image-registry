@@ -1,38 +1,36 @@
-import React, { useEffect, useState } from "react";
-import { UserAccountInfo } from "../types/app_types";
-import { Dialog } from "primereact/dialog";
-import { Divider } from "primereact/divider";
-import { Button } from "primereact/button";
-import { InputText } from "primereact/inputtext";
-import { Dropdown, DropdownChangeEvent } from "primereact/dropdown";
-import { isValidEmail } from "../utils";
-import HttpClient from "../client";
-import { useToast } from "./ToastComponent";
-import { ProgressSpinner } from "primereact/progressspinner";
+import React, { useEffect, useState } from 'react';
+import { Dialog } from 'primereact/dialog';
+import { Divider } from 'primereact/divider';
+import { Button } from 'primereact/button';
+import { InputText } from 'primereact/inputtext';
+import { Dropdown, DropdownChangeEvent } from 'primereact/dropdown';
+import { isValidEmail } from '../utils';
+import HttpClient from '../client';
+import { useToast } from './ToastComponent';
+import { ProgressSpinner } from 'primereact/progressspinner';
+import { UserAccountViewDto } from '../api';
 
 export type UserAcccountViewProps = {
-  account?: UserAccountInfo;
+  account?: UserAccountViewDto;
   visible: boolean;
   hideCallback: (reloadUsers: boolean) => void;
 };
 
-const Roles = ["Developer", "Maintainer", "Guest", "Admin"];
+const Roles = ['Developer', 'Maintainer', 'Guest', 'Admin'];
 
 const UserAccountView = (props: UserAcccountViewProps) => {
   const [role, setRole] = useState<string | undefined>(props.account?.role);
   const [email, setEmail] = useState<string | undefined>(props.account?.email);
-  const [displayName, setDisplayName] = useState<string | undefined>(
-    props.account?.display_name
-  );
+  const [displayName, setDisplayName] = useState<string | undefined>(props.account?.display_name);
 
-  const [emailValidationMsg, setEmailValidationMsg] = useState<string>("");
-  const [roleValidationMsg, setRoleValidationMsg] = useState<string>("");
+  const [emailValidationMsg, setEmailValidationMsg] = useState<string>('');
+  const [roleValidationMsg, setRoleValidationMsg] = useState<string>('');
 
   const { showSuccess, showError } = useToast();
 
   const [showProgressView, setShowProgressView] = useState<boolean>(false);
 
-  const roleChangeWarning = "Changing roles may affect user permissions."
+  const roleChangeWarning = 'Changing roles may affect user permissions.';
 
   // useEffect(() => {
   //   alert("From Account View: " + props.hideCallback)
@@ -45,50 +43,53 @@ const UserAccountView = (props: UserAcccountViewProps) => {
   }, [props.account]);
 
   const handleUpdateUserInfo = () => {
-    if (role == props.account?.role && email == props.account?.email &&
-      displayName == props.account?.display_name) {
-      showSuccess("No changes are detected!")
-      return
+    if (
+      role == props.account?.role &&
+      email == props.account?.email &&
+      displayName == props.account?.display_name
+    ) {
+      showSuccess('No changes are detected!');
+      return;
     }
 
-    let emailMsg = "";
+    let emailMsg = '';
 
     if (!email) {
-      emailMsg = "Enter email!";
+      emailMsg = 'Enter email!';
     } else if (!isValidEmail(email as string)) {
-      emailMsg = "Enter valid email!";
+      emailMsg = 'Enter valid email!';
     } else {
-      if (!emailValidationMsg.includes("taken")) {
-        emailMsg = "";
+      if (!emailValidationMsg.includes('taken')) {
+        emailMsg = '';
       } else {
         emailMsg = emailValidationMsg;
       }
     }
 
-    let roleMsg = "";
+    let roleMsg = '';
 
     if (!role) {
-      roleMsg = "Select a role!";
-      setRoleValidationMsg("Select a role!");
+      roleMsg = 'Select a role!';
+      setRoleValidationMsg('Select a role!');
     } else {
-      setRoleValidationMsg("");
+      setRoleValidationMsg('');
     }
 
     setEmailValidationMsg(emailMsg);
     setRoleValidationMsg(roleMsg);
 
-    if (emailMsg == "" && roleMsg == "") {
+    if (emailMsg == '' && roleMsg == '') {
       setShowProgressView(true);
       if (email != props.account?.email) {
         validateUsernameEmailAPICall(updateUserAccountAPICall);
       } else {
-        updateUserAccountAPICall()
+        updateUserAccountAPICall();
       }
     }
   };
 
   const handleDeleteUser = () => {
-    HttpClient.getInstance("http://localhost:8000/api/v1")
+    HttpClient.getInstance('http://localhost:8000/api/v1')
       .deleteUser(props.account?.id as string)
       .then((data) => {
         if (data.error) {
@@ -102,7 +103,7 @@ const UserAccountView = (props: UserAcccountViewProps) => {
         setTimeout(() => {
           setShowProgressView(false);
         }, 200);
-        showSuccess("Successfully deleted user account.");
+        showSuccess('Successfully deleted user account.');
         props.hideCallback(true);
       })
       .catch((err) => {
@@ -113,12 +114,12 @@ const UserAccountView = (props: UserAcccountViewProps) => {
         showError(err);
         return;
       });
-  }
+  };
 
   const validateUsernameEmailAPICall = (successFn: () => void) => {
-    HttpClient.getInstance("http://localhost:8000/api/v1")
+    HttpClient.getInstance('http://localhost:8000/api/v1')
       .valiateUser({
-        username: "",
+        username: '',
         email: email as string,
       })
       .then((data) => {
@@ -130,15 +131,16 @@ const UserAccountView = (props: UserAcccountViewProps) => {
           return;
         }
         if (!data.email_available) {
-          setEmailValidationMsg("Email is already taken!");
+          setEmailValidationMsg('Email is already taken!');
           setTimeout(() => {
             setShowProgressView(false);
           }, 200);
         } else {
           successFn();
         }
-      }).catch((err) => {
-        showError("Unexpected error occurred!");
+      })
+      .catch((err) => {
+        showError('Unexpected error occurred!');
         setTimeout(() => {
           setShowProgressView(false);
         }, 150);
@@ -146,12 +148,15 @@ const UserAccountView = (props: UserAcccountViewProps) => {
   };
 
   const updateUserAccountAPICall = () => {
-    HttpClient.getInstance("http://localhost:8000/api/v1")
-      .updateUserAccount({
-        email: email as string,
-        display_name: displayName as string,
-        role: role as string,
-      }, props.account?.id as string)
+    HttpClient.getInstance('http://localhost:8000/api/v1')
+      .updateUserAccount(
+        {
+          email: email as string,
+          display_name: displayName as string,
+          role: role as string,
+        },
+        props.account?.id as string
+      )
       .then((data) => {
         if (data.error) {
           showError(data.error);
@@ -163,7 +168,7 @@ const UserAccountView = (props: UserAcccountViewProps) => {
         setTimeout(() => {
           setShowProgressView(false);
         }, 200);
-        showSuccess("Successfully update user account.");
+        showSuccess('Successfully update user account.');
         props.hideCallback(true);
       })
       .catch((err) => {
@@ -180,12 +185,10 @@ const UserAccountView = (props: UserAcccountViewProps) => {
     setRole(e.target.value);
     if (e.target.value !== props.account?.role) {
     }
-  }
-
+  };
 
   return (
     <React.Fragment>
-
       <Dialog
         visible={props.visible}
         onHide={() => props.hideCallback(false)}
@@ -199,9 +202,7 @@ const UserAccountView = (props: UserAcccountViewProps) => {
                 className="flex-grow-0  border-round-top-lg 
              flex flex-row  align-items-center justify-content-between gap-2 p-3 pb-0 "
               >
-                <div className="font-medium text-lg text-color-secondary">
-                  User Account
-                </div>
+                <div className="font-medium text-lg text-color-secondary">User Account</div>
 
                 <div>
                   <span
@@ -225,14 +226,16 @@ const UserAccountView = (props: UserAcccountViewProps) => {
                     </div>
                     <div className="col-6 flex text-xs justify-content-end align-items-center pb-0 mb-0">
                       {emailValidationMsg && (
-                        <span className="text-red-300">
-                          {emailValidationMsg}
-                        </span>
+                        <span className="text-red-300">{emailValidationMsg}</span>
                       )}
                     </div>
 
                     <div className="col-12">
-                      <InputText value={email} className="border-1 text-xs" onChange={e => setEmail(e.target.value)} />
+                      <InputText
+                        value={email}
+                        className="border-1 text-xs"
+                        onChange={(e) => setEmail(e.target.value)}
+                      />
                     </div>
 
                     <div className="col-5 text-xs flex align-items-center">
@@ -248,7 +251,7 @@ const UserAccountView = (props: UserAcccountViewProps) => {
                       <InputText
                         value={displayName}
                         className="border-1 text-xs"
-                        onChange={e => setDisplayName(e.target.value)}
+                        onChange={(e) => setDisplayName(e.target.value)}
                       />
                     </div>
                     <div className="col-2"></div>
@@ -256,7 +259,7 @@ const UserAccountView = (props: UserAcccountViewProps) => {
                       <Dropdown
                         pt={{
                           input: {
-                            className: "text-xs",
+                            className: 'text-xs',
                           },
                         }}
                         className="w-full border-1 p-0 text-xs"
@@ -266,16 +269,13 @@ const UserAccountView = (props: UserAcccountViewProps) => {
                         onChange={handleRoleChange}
                       />
                     </div>
-                    {roleValidationMsg && <div className="col-12  text-red-300 text-xs ">
+                    {roleValidationMsg && <div className="col-12  text-red-300 text-xs "></div>}
 
-
-                    </div>}
-
-                    {role != props.account?.role && <div className="col-12 text-xs flex flex-row justify-content-center">
-                      <span className="text-red-300">
-                        {roleChangeWarning}
-                      </span>
-                    </div>}
+                    {role != props.account?.role && (
+                      <div className="col-12 text-xs flex flex-row justify-content-center">
+                        <span className="text-red-300">{roleChangeWarning}</span>
+                      </div>
+                    )}
 
                     <div className="col-12 flex flex-row justify-content-end">
                       <Button
@@ -298,8 +298,8 @@ const UserAccountView = (props: UserAcccountViewProps) => {
                   <span className="text-red-800">Danger Zone</span>
                 </div>
                 <div className="text-red-600 text-xs">
-                  Deleting this user will permanently remove all associated data.
-                  This action cannot be undone.
+                  Deleting this user will permanently remove all associated data. This action cannot
+                  be undone.
                 </div>
                 <Button
                   size="small"
@@ -325,12 +325,11 @@ const UserAccountView = (props: UserAcccountViewProps) => {
           style={{ zIndex: 1000 }}
         >
           <div className="flex flex-column align-items-center">
-            <ProgressSpinner style={{ width: "50px", height: "50px" }} />
+            <ProgressSpinner style={{ width: '50px', height: '50px' }} />
           </div>
         </div>
       )}
     </React.Fragment>
-
   );
 };
 

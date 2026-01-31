@@ -10,37 +10,35 @@ export function validateUsernameWithError(username: string): {
   error?: string;
 } {
   if (!username) {
-    return { isValid: false, error: "Username is required" };
+    return { isValid: false, error: 'Username is required' };
   }
 
   if (username.length < 3) {
-    return { isValid: false, error: "Username must be at least 3 characters" };
+    return { isValid: false, error: 'Username must be at least 3 characters' };
   }
 
   if (username.length > 32) {
-    return { isValid: false, error: "Username must not exceed 32 characters" };
+    return { isValid: false, error: 'Username must not exceed 32 characters' };
   }
 
   if (!usernameRegex.test(username)) {
     return {
       isValid: false,
-      error:
-        "Username can only contain letters, numbers, dots, underscores, and hyphens",
+      error: 'Username can only contain letters, numbers, dots, underscores, and hyphens',
     };
   }
 
   return { isValid: true };
 }
 
-
 export function validatePassword(pw: string): { isValid: boolean; msg: string } {
   // Length check
   if (pw.length < 12) {
-    return { isValid: false, msg: "Password must be at least 12 characters long." };
+    return { isValid: false, msg: 'Password must be at least 12 characters long.' };
   }
 
   if (pw.length > 64) {
-    return { isValid: false, msg: "Password cannot exceed 64 characters." };
+    return { isValid: false, msg: 'Password cannot exceed 64 characters.' };
   }
 
   let hasUpper = false;
@@ -61,26 +59,25 @@ export function validatePassword(pw: string): { isValid: boolean; msg: string } 
   }
 
   if (!hasUpper) {
-    return { isValid: false, msg: "Password must contain at least one uppercase letter." };
+    return { isValid: false, msg: 'Password must contain at least one uppercase letter.' };
   }
   if (!hasLower) {
-    return { isValid: false, msg: "Password must contain at least one lowercase letter." };
+    return { isValid: false, msg: 'Password must contain at least one lowercase letter.' };
   }
   if (!hasDigit) {
-    return { isValid: false, msg: "Password must contain at least one number." };
+    return { isValid: false, msg: 'Password must contain at least one number.' };
   }
   if (!hasSymbol) {
-    return { isValid: false, msg: "Password must contain at least one symbol (!@#$%^&*)." };
+    return { isValid: false, msg: 'Password must contain at least one symbol (!@#$%^&*).' };
   }
 
-  return { isValid: true, msg: "" };
+  return { isValid: true, msg: '' };
 }
 
 function isAllowedSymbol(ch: string): boolean {
-  const symbols = "!@#$%^&*";
+  const symbols = '!@#$%^&*';
   return symbols.includes(ch);
 }
-
 
 const NameRegex = /^[a-zA-Z0-9_-]+$/;
 

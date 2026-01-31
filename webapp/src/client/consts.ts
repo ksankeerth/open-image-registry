@@ -5,4 +5,4 @@ export const DATE_FIELDS = [
   'locked_at',
   'last_loggedin_at',
   'password_recovery_at',
-]
+];

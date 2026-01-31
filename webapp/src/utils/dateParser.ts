@@ -1,4 +1,5 @@
-import { DATE_FIELDS } from "../client/consts";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { DATE_FIELDS } from '../client/consts';
 
 export const parseDates = <T extends Record<string, any>>(obj: T): T => {
   if (!obj || typeof obj !== 'object') {
@@ -6,13 +7,13 @@ export const parseDates = <T extends Record<string, any>>(obj: T): T => {
   }
 
   if (Array.isArray(obj)) {
-    return obj.map(item => parseDates(item)) as unknown as T;
+    return obj.map((item) => parseDates(item)) as unknown as T;
   }
 
   const parsed: any = { ...obj };
 
   for (const key in parsed) {
-    if (parsed.hasOwnProperty(key)) {
+    if (Object.prototype.hasOwnProperty.call(parsed, key)) {
       const value = parsed[key];
 
       if (DATE_FIELDS.includes(key) && value) {
@@ -24,4 +25,4 @@ export const parseDates = <T extends Record<string, any>>(obj: T): T => {
   }
 
   return parsed;
-}
+};
