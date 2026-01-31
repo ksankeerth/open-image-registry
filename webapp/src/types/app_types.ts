@@ -82,7 +82,7 @@ export type TablePaginationState = {
 export type TableColumnFilterState<T, K extends keyof T = keyof T> = {
   key: keyof T;
   values: T[K][]; // equal filter only for simplicity
-}
+};
 
 export type TableFilterSearchPaginationSortState<T> = {
   sort?: TableSortState<T>;
@@ -91,15 +91,14 @@ export type TableFilterSearchPaginationSortState<T> = {
   search_value?: string;
 };
 
-
-export type MenuItem = {
+export type MenuEntity = {
   name: string;
   key: string;
   description: string;
   nav_link: string;
   icon_class?: string;
   collapsed?: boolean;
-  children: MenuItem[];
+  children: MenuEntity[];
 };
 
 type UserAccess = {
@@ -133,13 +132,13 @@ export type NamespaceInfo = {
 export type UserAccessInfo = {
   username: string;
   user_id: string;
-  user_role: 'maintainer' | 'developer' | 'guest'
-  resource_type: 'namespace' | 'repository' | 'upstream_registry'
+  user_role: 'maintainer' | 'developer' | 'guest';
+  resource_type: 'namespace' | 'repository' | 'upstream_registry';
   resource_id: string;
-  access_level: 'maintainer' | 'developer' | 'guest'
+  access_level: 'maintainer' | 'developer' | 'guest';
   granted_by: string;
   granted_at: Date;
-}
+};
 
 export type RepositoryUserAccessInfo = UserAccessInfo & { is_inherited: boolean };
 
@@ -152,14 +151,14 @@ export type NamespaceRepositoryInfo = {
   created_by: string;
   tags_count: string;
   state: 'active' | 'deprecated' | 'disabled';
-}
+};
 
 export type ChangeTrackerEventInfo = {
   id: string;
   timestamp: Date;
   type: 'add' | 'change' | 'delete';
   message: string;
-}
+};
 
 export type RepositoryTagInfo = {
   namespace_id: string;
@@ -170,4 +169,4 @@ export type RepositoryTagInfo = {
   stable: boolean;
   platform_os: string;
   platform_arch: string;
-}
+};
