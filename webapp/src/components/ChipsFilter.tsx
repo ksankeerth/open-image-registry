@@ -1,7 +1,7 @@
 import { Checkbox, CheckboxChangeEvent } from 'primereact/checkbox';
 import { Chip } from 'primereact/chip';
 import { OverlayPanel } from 'primereact/overlaypanel';
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 
 export type ChipFilterOption = {
   label: string;
@@ -18,16 +18,11 @@ export type ChipFilterProps = {
 const ChipsFilter = (props: ChipFilterProps) => {
   const opRef = useRef<OverlayPanel>(null);
   const [selectedOptions, setSelectedOptions] = useState<Set<string>>(() => {
-    // Initialize with options that are NOT unselected by default
     return new Set(
       props.filterOptions
         .filter((option) => !option.unselected_default)
         .map((option) => option.value)
     );
-  });
-
-  useEffect(() => {
-    props.handleFilterChange(Array.from(selectedOptions));
   });
 
   const handleCheckboxChange = (e: CheckboxChangeEvent) => {
@@ -40,7 +35,6 @@ const ChipsFilter = (props: ChipFilterProps) => {
         newSet.delete(e.value);
       }
 
-      // Call parent callback with updated array
       props.handleFilterChange(Array.from(newSet));
 
       return newSet;
