@@ -1,12 +1,12 @@
-import { Checkbox, CheckboxChangeEvent } from "primereact/checkbox";
-import { Chip } from "primereact/chip";
-import { OverlayPanel } from "primereact/overlaypanel";
-import React, { useRef, useState } from "react";
+import { Checkbox, CheckboxChangeEvent } from 'primereact/checkbox';
+import { Chip } from 'primereact/chip';
+import { OverlayPanel } from 'primereact/overlaypanel';
+import React, { useRef, useState, useEffect } from 'react';
 
 export type ChipFilterOption = {
   label: string;
   value: string;
-  unselected_default?: boolean
+  unselected_default?: boolean;
 };
 
 export type ChipFilterProps = {
@@ -17,113 +17,129 @@ export type ChipFilterProps = {
 
 const ChipsFilter = (props: ChipFilterProps) => {
   const opRef = useRef<OverlayPanel>(null);
-  const [showOptions, setShowOptions] = useState<boolean>(false);
-  const [selectedOptions, setSelectedOptions] = useState<Set<string>>(
-    new Set(props.filterOptions.filter(v => !v.unselected_default).map((op) => op.value))
-  );
+  const [selectedOptions, setSelectedOptions] = useState<Set<string>>(() => {
+    // Initialize with options that are NOT unselected by default
+    return new Set(
+      props.filterOptions
+        .filter((option) => !option.unselected_default)
+        .map((option) => option.value)
+    );
+  });
 
-  const handleFilterChange = (e: CheckboxChangeEvent) => {
-    if (e.checked) {
-      setSelectedOptions((current) => {
-        const newSet = new Set(current);
+  useEffect(() => {
+    props.handleFilterChange(Array.from(selectedOptions));
+  });
+
+  const handleCheckboxChange = (e: CheckboxChangeEvent) => {
+    setSelectedOptions((prevSelected) => {
+      const newSet = new Set(prevSelected);
+
+      if (e.checked) {
         newSet.add(e.value);
-        props.handleFilterChange(Array.from(newSet))
-        return newSet;
-      });
-    } else {
-      setSelectedOptions((current) => {
-        const newSet = new Set(current);
+      } else {
         newSet.delete(e.value);
-        props.handleFilterChange(Array.from(newSet))
-        return newSet;
-      });
+      }
+
+      // Call parent callback with updated array
+      props.handleFilterChange(Array.from(newSet));
+
+      return newSet;
+    });
+  };
+
+  const renderChips = () => {
+    if (selectedOptions.size === 0) {
+      return null;
     }
 
+    const selectedArray = Array.from(selectedOptions);
 
-  }
+    // If maxChipsPerRow is specified, render in rows
+    if (props.maxChipsPerRow) {
+      const rows = Math.ceil(selectedArray.length / props.maxChipsPerRow);
+
+      return (
+        <div className="flex flex-column">
+          {Array.from({ length: rows }).map((_, rowIndex) => {
+            const start = rowIndex * props.maxChipsPerRow!;
+            const end = start + props.maxChipsPerRow!;
+            const rowItems = selectedArray.slice(start, end);
+
+            return (
+              <div className="flex flex-row" key={rowIndex}>
+                {rowItems.map((value) => {
+                  const option = props.filterOptions.find((op) => op.value === value);
+                  return (
+                    <Chip
+                      key={value}
+                      label={option?.label || value}
+                      className="m-1 text-xs font-inter"
+                      pt={{
+                        root: {
+                          className: 'bg-white',
+                        },
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // Single row of chips
+    return (
+      <div className="flex flex-wrap">
+        {selectedArray.map((value) => {
+          const option = props.filterOptions.find((op) => op.value === value);
+          return <Chip key={value} label={option?.label || value} className="m-1 text-xs" />;
+        })}
+      </div>
+    );
+  };
 
   return (
-    <React.Fragment>
-      {/*  border-1 border-solid border-round-lg border-teal-100 */}
-      <div
-        className="p-2 m-0
-        
-        flex justify-content-between align-items-center
-        hover:bg-white hover:border-1"
-        onClick={(e) => {
+    <div
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
           opRef.current?.toggle(e);
-        }}
-      >
-        {!showOptions && (
-          <span
-            className="pi pi-chevron-down  text-xs pr-2 pl-2"
-            onClick={() => setShowOptions((c) => !c)}
-          />
-        )}
-        {showOptions && (
-          <span
-            className="pi pi-chevron-up  text-xs pr-2 pl-2"
-            onClick={() => setShowOptions((c) => !c)}
-          />
-        )}
-        <div className="flex flex-column">
-          {selectedOptions.size !== 0 &&
-            props.maxChipsPerRow &&
-            Array.from({ length: Math.ceil(selectedOptions.size / props.maxChipsPerRow) }).map((_, i) => {
-              const optionsArray = Array.from(selectedOptions);
-              const start = i * (props.maxChipsPerRow as number);
-              const end = (i + 1) * (props.maxChipsPerRow as number);
-              const rowItems = optionsArray.slice(start, end);
+        }
+      }}
+      className="p-2 m-0 flex align-items-center gap-2 cursor-pointer hover:border-1 border-round"
+      onClick={(e) => opRef.current?.toggle(e)}
+    >
+      {/* Toggle Icon */}
+      <i
+        // eslint-disable-next-line react-hooks/refs
+        className={`pi ${opRef.current?.state?.overlayVisible ? 'pi-chevron-up' : 'pi-chevron-down'} text-xs`}
+      />
 
-              return (
-                <div className="flex flex-row" key={i}>
-                  {rowItems.map((value: string) => {
-                    const label = props.filterOptions.find((op) => op.value === value)?.label;
-                    return (
-                      <Chip
-                        key={value}
-                        className="m-1 text-xs"
-                        label={label}
-                      />
-                    );
-                  })}
-                </div>
-              );
-            })}
+      {/* Chips Display */}
+      {renderChips()}
+
+      {/* Filter Options Overlay */}
+      <OverlayPanel ref={opRef} pt={{ content: { className: 'p-3' } }}>
+        <div className="flex flex-column gap-2">
+          {props.filterOptions.map((option) => (
+            <div key={option.value} className="flex align-items-center gap-3">
+              <Checkbox
+                inputId={`filter-${option.value}`}
+                value={option.value}
+                checked={selectedOptions.has(option.value)}
+                onChange={handleCheckboxChange}
+              />
+              <label htmlFor={`filter-${option.value}`} className="cursor-pointer text-sm">
+                {option.label}
+              </label>
+            </div>
+          ))}
         </div>
-
-        {selectedOptions.size !== 0 && !props.maxChipsPerRow && (
-          <div className="flex">
-            {Array.from(selectedOptions).map((value: string) => {
-              const label = props.filterOptions.find((op) => op.value === value)?.label;
-              return (
-                <Chip
-                  key={value}
-                  className="m-1 text-xs"
-                  label={label}
-                />
-              );
-            })}
-          </div>
-        )}
-
-
-        <OverlayPanel ref={opRef} className="p-0 m-0">
-          <div className="flex flex-column text-xs">
-            {props.filterOptions.map((node: ChipFilterOption) => (
-              <div className="flex flex-row gap-5 p-1 align-items-center">
-                <Checkbox
-                  value={node.value}
-                  checked={selectedOptions.has(node.value)}
-                  onChange={handleFilterChange}
-                />
-                <div>{node.label}</div>
-              </div>
-            ))}
-          </div>
-        </OverlayPanel>
-      </div>
-    </React.Fragment >
+      </OverlayPanel>
+    </div>
   );
 };
 
