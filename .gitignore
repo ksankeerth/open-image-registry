@@ -25,3 +25,5 @@ poc_scripts/
 related-tools/
 
 webapp/dist
+
+server/certs/
