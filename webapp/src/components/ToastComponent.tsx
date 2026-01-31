@@ -1,15 +1,9 @@
-import React, {
-  createContext,
-  ReactNode,
-  useContext,
-  useState,
-  useCallback,
-} from "react";
+import React, { createContext, ReactNode, useContext, useState, useCallback } from 'react';
 
 // Types
 interface ToastMessage {
   id: string;
-  severity: "success" | "warn" | "error" | "info";
+  severity: 'success' | 'warn' | 'error' | 'info';
   detail: string;
   life: number;
   timestamp: number;
@@ -33,7 +27,7 @@ const ToastContext = createContext<ToastContextType | undefined>(undefined);
 export const useToast = (): ToastContextType => {
   const context = useContext(ToastContext);
   if (!context) {
-    throw new Error("useToast must be used within a ToastProvider");
+    throw new Error('useToast must be used within a ToastProvider');
   }
   return context;
 };
@@ -45,31 +39,31 @@ const ToastItem: React.FC<{
 }> = ({ message, onRemove }) => {
   const getSeverityConfig = (severity: string) => {
     switch (severity) {
-      case "success":
+      case 'success':
         return {
-          color: "#58cd9a",
-          title: "Success",
+          color: '#58cd9a',
+          title: 'Success',
         };
-      case "warn":
-      case "warning":
+      case 'warn':
+      case 'warning':
         return {
-          color: "#f0ad4e",
-          title: "Warning",
+          color: '#f0ad4e',
+          title: 'Warning',
         };
-      case "error":
+      case 'error':
         return {
-          color: "#dc3545",
-          title: "Failure",
+          color: '#dc3545',
+          title: 'Failure',
         };
-      case "info":
+      case 'info':
         return {
-          color: "#17a2b8",
-          title: "Info",
+          color: '#17a2b8',
+          title: 'Info',
         };
       default:
         return {
-          color: "#58cd9a",
-          title: "Info",
+          color: '#58cd9a',
+          title: 'Info',
         };
     }
   };
@@ -91,30 +85,35 @@ const ToastItem: React.FC<{
     <div
       className="toast-item"
       style={{
-        animation: "slideInFromRight 0.4s ease-out",
-        marginBottom: "0.5rem",
+        animation: 'slideInFromRight 0.4s ease-out',
+        marginBottom: '0.5rem',
       }}
     >
       <div
         className="flex justify-content-between w-20rem m-2 p-2 border-round-xl shadow-2 surface-0"
         style={{
-          borderStyle: "solid",
+          borderStyle: 'solid',
           borderWidth: 0,
-          borderLeftWidth: "4px",
+          borderLeftWidth: '4px',
           borderColor: config.color,
           zIndex: 1000,
         }}
       >
         <div className="flex flex-column">
           <div className="font-semibold">{config.title}</div>
-          <div className="text-xs text-color-secondary mt-1">
-            {message.detail}
-          </div>
+          <div className="text-xs text-color-secondary mt-1">{message.detail}</div>
         </div>
         <div className="flex align-items-center">
           <i
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                onRemove(message.id);
+              }
+            }}
             className="pi pi-times cursor-pointer text-color-secondary hover:text-color"
-            style={{ fontSize: "0.75rem" }}
+            style={{ fontSize: '0.75rem' }}
             onClick={() => onRemove(message.id)}
           />
         </div>
@@ -134,15 +133,15 @@ const ToastContainer: React.FC<{
     <div
       className="toast-container"
       style={{
-        position: "fixed",
-        top: "1rem",
-        right: "1rem",
+        position: 'fixed',
+        top: '1rem',
+        right: '1rem',
         zIndex: 9999,
-        pointerEvents: "none",
+        pointerEvents: 'none',
       }}
     >
       {messages.map((message) => (
-        <div key={message.id} style={{ pointerEvents: "auto" }}>
+        <div key={message.id} style={{ pointerEvents: 'auto' }}>
           <ToastItem message={message} onRemove={onRemove} />
         </div>
       ))}
@@ -155,12 +154,11 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
   const [messages, setMessages] = useState<ToastMessage[]>([]);
 
   // Generate unique ID for each toast
-  const generateId = () =>
-    `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const generateId = () => `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
   // Add a new toast message
   const addMessage = useCallback(
-    (severity: ToastMessage["severity"], detail: string, life: number) => {
+    (severity: ToastMessage['severity'], detail: string, life: number) => {
       const newMessage: ToastMessage = {
         id: generateId(),
         severity,
@@ -187,28 +185,28 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
   // Toast methods
   const showSuccess = useCallback(
     (message: string, life: number = 5000) => {
-      addMessage("success", message, life);
+      addMessage('success', message, life);
     },
     [addMessage]
   );
 
   const showWarning = useCallback(
     (message: string, life: number = 5000) => {
-      addMessage("warn", message, life);
+      addMessage('warn', message, life);
     },
     [addMessage]
   );
 
   const showError = useCallback(
     (message: string, life: number = 6000) => {
-      addMessage("error", message, life);
+      addMessage('error', message, life);
     },
     [addMessage]
   );
 
   const showInfo = useCallback(
     (message: string, life: number = 5000) => {
-      addMessage("info", message, life);
+      addMessage('info', message, life);
     },
     [addMessage]
   );
