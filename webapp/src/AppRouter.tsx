@@ -1,79 +1,60 @@
-import React from "react";
-import { createBrowserRouter } from "react-router-dom";
-import RootLayout from "./components/RootLayout";
-import HomePage from "./pages/HomePage";
-import RepositoryViewPage from "./pages/RepositoryViewPage";
-import LoginPage from "./pages/LoginPage";
-import NewAccountSetupPage from "./pages/NewAccountSetupPage";
-
-import RegistryConsolePage from "./pages/console/RegistryConsolePage";
-import UserAdministrationPage from "./pages/console/UserAdministrationPage";
-import NamespaceAccessPage from "./pages/console/NamespaceAccesPage";
-import RepositoryAccessViewPage from "./pages/console/RepositoryAccessViewPage";
-import NamespaceAccessViewPage from "./pages/console/NamespaceAccessViewPage";
-import UpstreamAccessManagementPage from "./pages/console/UpstreamAccessManagementPage";
-import RepositoryAccessPage from "./pages/console/RepositoryAccessPage";
+import React from 'react';
+import { createBrowserRouter } from 'react-router-dom';
+import RootLayout from './components/RootLayout';
+import HomePage from './pages/HomePage';
+import LoginPage from './pages/LoginPage';
+import NewAccountSetupPage from './pages/NewAccountSetupPage';
+import ManagmentConsole from './pages/mgmt-console';
+import RegistryConsole from './pages/reg-console';
+import NamespaceMgmtPage from './pages/mgmt-console/ns/NamespaceMgmtPage';
+import NamespaceViewPage from './pages/mgmt-console/NamespaceViewPage';
+import UserAdministrationPage from './pages/mgmt-console/user/UserAdministrationPage';
 
 const AppRouter = createBrowserRouter([
   {
-    path: "/",
+    path: '/',
     children: [
       {
-        path: "/login",
+        path: '/login',
         element: <LoginPage />,
       },
       {
-        path: "/account-setup/:uuid",
+        path: '/account-setup/:uuid',
         element: <NewAccountSetupPage />,
       },
       {
-        path: "/",
+        path: '/',
         Component: RootLayout,
         children: [
           {
-            path: "",
+            path: '',
             element: <HomePage />,
             index: true,
           },
           {
-            path: "/console",
-            element: <RegistryConsolePage />,
+            path: '/console/management',
+            element: <ManagmentConsole />,
             children: [
               {
-                path: "/console/user-management/users",
-                element: <UserAdministrationPage />
-
+                path: '/console/management/users',
+                element: <UserAdministrationPage />,
               },
               {
-                path: "/console/access-management",
+                path: '/console/management/namespaces',
+                element: <NamespaceMgmtPage />,
                 children: [
                   {
-                    path: "/console/access-management/namespaces/:id",
-                    element: <NamespaceAccessViewPage />
+                    path: '/console/management/namespaces/:id',
+                    element: <NamespaceViewPage />,
                   },
-                  {
-                    path: "/console/access-management/namespaces",
-                    element: <NamespaceAccessPage />
-                  },
-                  {
-                    path: "/console/access-management/repositories",
-                    element: <RepositoryAccessPage />
-                  },
-                  {
-                    path: "/console/access-management/repositories/:id",
-                    element: <RepositoryAccessViewPage />
-                  },
-                  {
-                    path: "/console/access-management/upstreams",
-                    element: <UpstreamAccessManagementPage />
-                  }
-                ]
-              }
+                ],
+              },
             ],
           },
           {
-            path: "/repository/:repository_name",
-            element: <RepositoryViewPage />,
+            path: '/console/registry',
+            element: <RegistryConsole />,
+            children: [],
           },
         ],
       },
