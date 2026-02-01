@@ -13,9 +13,9 @@ import { isValidNamespace } from '../utils';
 import { useLoader } from './loader';
 import {
   GetUsersData,
-  getRegistryNamespacesCheckName,
+  getResourceNamespacesCheckName,
   getUsers,
-  postRegistryNamespaces,
+  postResourceNamespaces,
 } from '../api';
 
 export type CreateNamespaceDialogProps = {
@@ -62,7 +62,7 @@ const CreateNamespaceDialog = (props: CreateNamespaceDialogProps) => {
 
   const validateNamespaceAvailability = async (name: string, successFn: () => void) => {
     showLoading('Checking name availability ...');
-    const { data, error } = await getRegistryNamespacesCheckName({
+    const { data, error } = await getResourceNamespacesCheckName({
       query: {
         name: name,
       },
@@ -85,7 +85,7 @@ const CreateNamespaceDialog = (props: CreateNamespaceDialogProps) => {
   const saveNamespace = async () => {
     showLoading('Creating namespace...');
 
-    const { data, error } = await postRegistryNamespaces({
+    const { error } = await postResourceNamespaces({
       body: {
         name,
         description,
@@ -99,7 +99,7 @@ const CreateNamespaceDialog = (props: CreateNamespaceDialogProps) => {
     if (error) {
       showError(error.error_message);
     } else {
-      showSuccess(`Successfully created namespace${data.id}!`);
+      showSuccess(`Successfully created namespace!`);
       resetFields();
     }
   };
