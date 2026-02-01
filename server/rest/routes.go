@@ -48,14 +48,14 @@ func AppRouter(webappConfig *config.WebAppConfig, store store.Store, jwtProvider
 
 	authHandler := auth.NewAuthAPIHandler(store, jwtProvider, authMiddleware)
 	userHandler := user.NewUserAPIHandler(store, ec)
-	registryAccessHandler := resource.NewRegistryResourceHandler(store, accessManager)
+	registryResourceHandler := resource.NewRegistryResourceHandler(store, accessManager)
 
 	// API routes
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Mount("/onboarding", userHandler.OnboardingRoutes())
 		r.Mount("/users", authMiddleware.Authenticate(userHandler.Routes()))
 		r.Mount("/auth", authHandler.Routes())
-		r.Mount("/resource", authMiddleware.Authenticate(registryAccessHandler.Routes()))
+		r.Mount("/resource", authMiddleware.Authenticate(registryResourceHandler.Routes()))
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 			//TODO: develop health check endpoint later
 			w.WriteHeader(http.StatusOK)
