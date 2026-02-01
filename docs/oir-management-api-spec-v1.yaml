@@ -592,7 +592,7 @@ paths:
         '500': { $ref: '#/components/responses/InternalError' }
 
   # --- NAMESPACES ---
-  /registry/namespaces:
+  /resource/namespaces:
     get:
       tags: [Namespaces]
       summary: List and filter namespaces
@@ -668,7 +668,7 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/InternalError' }
 
-  /registry/namespaces/{id}:
+  /resource/namespaces/{id}:
     head:
       tags: [Namespaces]
       summary: Check if namespace exists
@@ -728,7 +728,7 @@ paths:
       responses:
         '200': { description: Namespace deleted successfully }
 
-  /registry/namespaces/{id}/visibility:
+  /resource/namespaces/{id}/visibility:
     patch:
       tags: [Namespaces]
       summary: Change namespace visibility
@@ -784,7 +784,7 @@ paths:
 
         '500': { $ref: '#/components/responses/InternalError' }
 
-  /registry/namespaces/{id}/state:
+  /resource/namespaces/{id}/state:
     patch:
       tags: [Namespaces]
       summary: Change namespace state
@@ -847,7 +847,7 @@ paths:
 
         '500': { $ref: '#/components/responses/InternalError' }
 
-  /registry/namespaces/{id}/users:
+  /resource/namespaces/{id}/users:
     get:
       tags: [Namespaces]
       summary: List users with access to namespace
@@ -969,7 +969,7 @@ paths:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
         '500': { $ref: '#/components/responses/InternalError' }
 
-  /registry/namespaces/{id}/users/{userID}:
+  /resource/namespaces/{id}/users/{userID}:
     delete:
       tags: [Namespaces, Access]
       summary: Revoke user access from namespace
@@ -1008,7 +1008,7 @@ paths:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
         '500': { $ref: '#/components/responses/InternalError' }
 
-  /registry/namespaces/check-name:
+  /resource/namespaces/check-name:
       get:
         tags: [Namespaces]
         summary: Check namespace name availability
