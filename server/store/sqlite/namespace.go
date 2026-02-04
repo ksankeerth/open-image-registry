@@ -30,7 +30,7 @@ func (n *namespaceStore) getQuerier(ctx context.Context) store.Querier {
 	return n.db
 }
 
-func (n *namespaceStore) Create(ctx context.Context, regId, name, purpose, description string, isPublic bool) (string, error) {
+func (n *namespaceStore) Create(ctx context.Context, regId, name, purpose, description string, isPublic bool, createdBy string) (string, error) {
 	q := n.getQuerier(ctx)
 
 	var id string
@@ -38,7 +38,7 @@ func (n *namespaceStore) Create(ctx context.Context, regId, name, purpose, descr
 	if isPublic {
 		publicNamespace = 1
 	}
-	err := q.QueryRowContext(ctx, NamespaceCreateQuery, regId, name, description, purpose, publicNamespace).Scan(&id)
+	err := q.QueryRowContext(ctx, NamespaceCreateQuery, regId, name, description, purpose, publicNamespace, createdBy).Scan(&id)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("failed to create namespace")
 		return "", dberrors.ClassifyError(err, NamespaceCreateQuery)
@@ -56,7 +56,7 @@ func (n *namespaceStore) Get(ctx context.Context, id string) (*models.NamespaceM
 
 	var m models.NamespaceModel
 	var publicNamespace int
-	err := row.Scan(&m.RegistryId, &m.Name, &m.Description, &m.Purpose, &publicNamespace, &m.State, &createdAt, &updatedAt)
+	err := row.Scan(&m.RegistryId, &m.Name, &m.Description, &m.Purpose, &publicNamespace, &m.State, &createdAt, &updatedAt, &m.CreatedBy)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil // not found
@@ -95,7 +95,7 @@ func (n *namespaceStore) GetByName(ctx context.Context, regId, name string) (*mo
 	var createdAt, updatedAt string
 
 	var m models.NamespaceModel
-	err := row.Scan(&m.RegistryId, &m.Name, &m.Description, &m.Purpose, &m.IsPublic, &m.State, &createdAt, &updatedAt)
+	err := row.Scan(&m.RegistryId, &m.Name, &m.Description, &m.Purpose, &m.IsPublic, &m.State, &createdAt, &updatedAt, &m.CreatedBy)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil // not found
@@ -185,7 +185,7 @@ func (n *namespaceStore) GetByIdentifier(ctx context.Context, registryId, identi
 	var isPublic int
 
 	err := q.QueryRowContext(ctx, NamespaceGetByIdentifierQuery, registryId, identifier, identifier).Scan(&m.Id,
-		&m.RegistryId, &m.Name, &m.Description, &m.Purpose, &m.IsPublic, &m.State, &createdAt, &updatedAt)
+		&m.RegistryId, &m.Name, &m.Description, &m.Purpose, &m.IsPublic, &m.State, &createdAt, &updatedAt, &m.CreatedBy)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil

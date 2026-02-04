@@ -11,7 +11,7 @@ const (
 )
 
 const (
-	ContextUserID        = "user_id"
+	ContextUsername      = "username"
 	ContextRole          = "role"
 	ContextSignatureHash = "sig_hash"
 	ContextExpAt         = "exp"

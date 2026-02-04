@@ -7,7 +7,7 @@ import (
 )
 
 type NamespaceStore interface {
-	Create(ctx context.Context, regId, name, purpose, description string, isPublic bool) (id string, err error)
+	Create(ctx context.Context, regId, name, purpose, description string, isPublic bool, createdBy string) (id string, err error)
 
 	Get(ctx context.Context, id string) (*models.NamespaceModel, error)
 
