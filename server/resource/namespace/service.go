@@ -52,9 +52,10 @@ func (svc *namespaceService) createNamespace(reqCtx context.Context, req *mgmt.C
 		res.errMsg = "Another namespace is available with same name"
 		return res, nil
 	}
+	createdBy := reqCtx.Value(constants.ContextUsername).(string)
 
 	res.nsId, err = svc.store.Namespaces().Create(ctx, constants.HostedRegistryID, req.Name, req.Purpose,
-		req.Description, req.IsPublic)
+		req.Description, req.IsPublic, createdBy)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Error occurred when creating namespace: %s", req.Name)
 		return res, err
@@ -138,6 +139,7 @@ func (svc *namespaceService) getNamespace(reqCtx context.Context, identifier str
 		log.Logger().Error().Err(err).Msgf("Error in retriving namespace: %s", identifier)
 		return nil, err
 	}
+
 	return m, nil
 }
 

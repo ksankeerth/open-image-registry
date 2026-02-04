@@ -1622,7 +1622,7 @@ components:
 
     NamespaceResponse:
       type: object
-      required: [id, registry_id, name, state, is_public, created_at]
+      required: [id, registry_id, name, state, is_public, created_at, created_by]
       properties:
         id: { type: string }
         registry_id: { type: string }
@@ -1642,6 +1642,8 @@ components:
           type: string
           format: date-time
           nullable: true
+        created_by:
+          type: string
 
     AccessGrantRequest:
       type: object

@@ -10,6 +10,7 @@ type NamespaceModel struct {
 	State       string
 	Purpose     string
 	IsPublic    bool
+	CreatedBy   string
 	CreatedAt   time.Time
 	UpdatedAt   *time.Time
 }
@@ -22,6 +23,7 @@ type RepositoryModel struct {
 	Description string
 	IsPublic    bool
 	State       string
+	CreatedBy   string
 	CreatedAt   time.Time
 	UpdatedAt   *time.Time
 }
@@ -39,8 +41,8 @@ type ImageBlobMetaModel struct {
 
 type ImageBlobUploadSessionModel struct {
 	SessionID     string
-	NamespaceID    string
-	RepositoryID    string
+	NamespaceID   string
+	RepositoryID  string
 	BytesReceived int
 	CreatedAt     time.Time
 	UpdatedAt     *time.Time

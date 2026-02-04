@@ -44,8 +44,8 @@ func (a *Authenticator) Authenticate(next http.Handler) http.Handler {
 			return
 		}
 
-		userId, ok := claims[constants.ClaimSubject]
-		if !ok || userId == "" {
+		username, ok := claims[constants.ClaimSubject]
+		if !ok || username == "" {
 			httperrors.Unauthorized(w, 401, "user is not found in token")
 			return
 		}
@@ -72,10 +72,10 @@ func (a *Authenticator) Authenticate(next http.Handler) http.Handler {
 			return
 		}
 
-		user, err := a.store.Users().Get(r.Context(), userId.(string))
+		user, err := a.store.Users().Get(r.Context(), username.(string))
 		if err != nil {
 			log.Logger().Error().Err(err).Msgf("Unable to verify login due to user retrieval errors: %s",
-				userId)
+				username)
 			httperrors.InternalError(w, 500, "unable to verify user due to errors")
 			return
 		}
@@ -89,7 +89,7 @@ func (a *Authenticator) Authenticate(next http.Handler) http.Handler {
 		issuedAt, _ := claims[lib.ClaimIat]
 
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, constants.ContextUserID, userId)
+		ctx = context.WithValue(ctx, constants.ContextUsername, username)
 		ctx = context.WithValue(ctx, constants.ContextRole, role)
 		ctx = context.WithValue(ctx, constants.ContextSignatureHash, signatureHash)
 		ctx = context.WithValue(ctx, constants.ContextExpAt, expiresAt)

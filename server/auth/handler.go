@@ -130,7 +130,7 @@ func (h *AuthAPIHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userId := r.Context().Value(constants.ContextUserID)
+	userId := r.Context().Value(constants.ContextUsername)
 	if userId == nil {
 		log.Logger().Error().Msg("user id is not set in request context")
 		httperrors.InternalError(w, 500, "Invalid value for userid")

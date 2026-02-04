@@ -20,6 +20,7 @@ func makeGetNamespaceResponse(m *models.NamespaceModel) *mgmt.NamespaceResponse 
 		State:       m.State,
 		CreatedAt:   m.CreatedAt,
 		UpdatedAt:   m.UpdatedAt,
+		CreatedBy:   m.CreatedBy,
 	}
 }
 

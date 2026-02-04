@@ -144,7 +144,8 @@ func (svc *RegistryService) initiateBlobUpload(reqCtx context.Context, namespace
 		return "", err
 	}
 	if namespaceID == "" && cfg.CreateNamespaceOnPush {
-		namespaceID, err = svc.store.Namespaces().Create(ctx, svc.registryId, namespace, "", "", false)
+		// TODO: createdBy has to be changed with correct value
+		namespaceID, err = svc.store.Namespaces().Create(ctx, svc.registryId, namespace, "", "", false, "admin")
 		if err != nil {
 			log.Logger().Error().Err(err).Msg("Failed to create namespace on image push")
 			return "", err
