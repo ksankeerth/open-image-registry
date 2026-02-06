@@ -354,7 +354,9 @@ func (b *ListQueryBuilder) isSortFieldAllowed(field string) bool {
 
 	// Check both original and transformed field
 	return slices.Contains(b.allowedSortFields, strings.ToUpper(field)) ||
-		slices.Contains(b.allowedSortFields, transformedField)
+		slices.Contains(b.allowedSortFields, strings.ToLower(field)) ||
+		slices.Contains(b.allowedSortFields, strings.ToLower(transformedField)) ||
+		slices.Contains(b.allowedSortFields, strings.ToUpper(transformedField))
 }
 
 // transformField converts field if transform is configured

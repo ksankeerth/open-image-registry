@@ -516,3 +516,16 @@ func (u *userStore) RecordLastAccessedTime(ctx context.Context, userId string, t
 
 	return nil
 }
+
+// This method is only to use clean db to test and verify records in integration
+// Considering the safetly, this just marks as deleted in db instead of hard delete.
+func (u *userStore) DeleteAllNonAdminAccounts(ctx context.Context) error {
+	q := u.getQuerier(ctx)
+
+	_, err := q.ExecContext(ctx, DeleteAllNonAdminAccounts)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("failed to delete all non-admin accounts")
+		return dberrors.ClassifyError(err, DeleteAllNonAdminAccounts)
+	}
+	return nil
+}

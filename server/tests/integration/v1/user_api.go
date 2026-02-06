@@ -2,9 +2,12 @@ package v1
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -48,8 +51,6 @@ func (u *UserTestSuite) Run(t *testing.T) {
 	t.Run("CheckAvailability_Success", u.testCheckAvailabilitySuccess)
 	t.Run("CheckAvailability_Validation", u.testCheckAvailabilityValidation)
 
-
-
 	t.Run("UpdateUser_Success", u.testUpdateUserSuccess)
 	t.Run("UpdateUser_Validation", u.testUpdateUserValidationErrors)
 
@@ -57,6 +58,8 @@ func (u *UserTestSuite) Run(t *testing.T) {
 	t.Run("RoleChange_Constraints", u.testRoleChangeConstraints)
 	t.Run("LockUnlock_Flow", u.testLockUnlockFlow)
 	t.Run("DeleteUser_Constraints", u.testDeleteUserConstraints)
+
+	t.Run("ListUsers", u.testListUser)
 
 	t.Run("Generic_ContentType", u.testGenericContentType)
 }
@@ -441,5 +444,170 @@ func (u *UserTestSuite) testGenericContentType(t *testing.T) {
 		req.Header.Set("Content-Type", "application/xml")
 		resp, _ := http.DefaultClient.Do(req)
 		assert.Equal(t, http.StatusUnsupportedMediaType, resp.StatusCode)
+	}
+}
+
+func (u *UserTestSuite) testListUser(t *testing.T) {
+	// Clean all the users created by other tests to able to predict the order
+	u.seeder.DeleteAllNonAdminUsers(t)
+
+	// Prepare data
+	m1 := u.seeder.ProvisionUser(t, "maintainer1", "maintainer1@t.com", "Maintainer")
+	require.NotEmpty(t, m1)
+	m2 := u.seeder.ProvisionUser(t, "maintainer2", "maintainer2@t.com", "Maintainer")
+	require.NotEmpty(t, m2)
+	m3 := u.seeder.ProvisionUser(t, "maintainer3", "maintainer3@t.com", "Maintainer")
+	require.NotEmpty(t, m3)
+	m4 := u.seeder.ProvisionUser(t, "maintainer4", "maintainer4@t.com", "Maintainer")
+	require.NotEmpty(t, m4)
+	m5 := u.seeder.ProvisionUser(t, "maintainer5", "maintainer5@t.com", "Maintainer")
+	require.NotEmpty(t, m5)
+
+	d1 := u.seeder.ProvisionUser(t, "dev1", "dev1@t.com", "Developer")
+	require.NotEmpty(t, d1)
+	d2 := u.seeder.ProvisionUser(t, "dev2", "dev2@t.com", "Developer")
+	require.NotEmpty(t, d2)
+	d3 := u.seeder.ProvisionUser(t, "dev3", "dev3@t.com", "Developer")
+	require.NotEmpty(t, d3)
+	d4 := u.seeder.ProvisionUser(t, "dev4", "dev4@t.com", "Developer")
+	require.NotEmpty(t, d4)
+
+	g1 := u.seeder.ProvisionUser(t, "guest1", "guest1@t.com", "Guest")
+	require.NotEmpty(t, g1)
+	g2 := u.seeder.ProvisionUser(t, "guest2", "guest2@t.com", "Guest")
+	require.NotEmpty(t, g2)
+	g3 := u.seeder.ProvisionUser(t, "guest3", "guest3@t.com", "Guest")
+	require.NotEmpty(t, g3)
+	g4 := u.seeder.ProvisionUser(t, "guest4", "guest4@t.com", "Guest")
+	require.NotEmpty(t, g4)
+
+	tcs := []struct {
+		name             string
+		queryParams      map[string]string
+		statusCode       int
+		total            int
+		countCurrentPage int
+		firstId          string
+		lastId           string
+		expectedIds      []any
+		descSorting      bool
+	}{
+		{
+			name:             "Without any filters",
+			queryParams:      map[string]string{},
+			statusCode:       http.StatusOK,
+			total:            -1,
+			countCurrentPage: -1,
+		},
+		{
+			name: "With search term 'gue'",
+			queryParams: map[string]string{
+				"search": "gue",
+			},
+			total:            4,
+			countCurrentPage: 4,
+			expectedIds:      []any{g1, g2, g3, g4},
+			statusCode:       http.StatusOK,
+		},
+		{
+			name: "With Search term and pagination",
+			queryParams: map[string]string{
+				"search": "gue",
+				"page":   "4",
+				"limit":  "1",
+			},
+			total:            4,
+			countCurrentPage: 1,
+			expectedIds:      []any{g4},
+			statusCode:       http.StatusOK,
+		},
+		{
+			name: "With filter role = 'Maintainer'",
+			queryParams: map[string]string{
+				"role": "Maintainer",
+			},
+			total:            5,
+			countCurrentPage: 5,
+			expectedIds:      []any{m1, m2, m3, m4, m5},
+			statusCode:       http.StatusOK,
+		},
+		{
+			name: "Sorted by 'role' in descending order",
+			queryParams: map[string]string{
+				"sort_by": "role",
+				"order":   "desc",
+			},
+			firstId:          m1,
+			statusCode:       http.StatusOK,
+			total:            -1,
+			countCurrentPage: -1,
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			reqURL := u.testBaseURL + testdata.EndpointUsers
+
+			queryParams := url.Values{}
+			for key, value := range tc.queryParams {
+				queryParams.Add(key, value)
+			}
+			reqURL += "?" + queryParams.Encode()
+
+			req, err := http.NewRequest(http.MethodGet, reqURL, nil)
+			require.NoError(t, err)
+			helpers.SetAuthCookie(req, u.seeder.AdminToken(t))
+
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			defer resp.Body.Close()
+
+			var resBody map[string]any
+			err = json.NewDecoder(resp.Body).Decode(&resBody)
+			require.NoError(t, err)
+
+			total := resBody["total"]
+			if tc.total != -1 {
+				require.Equal(t, float64(tc.total), total)
+			}
+			users, ok := resBody["entities"].([]any)
+			require.True(t, ok)
+
+			var ids []string
+			for _, user := range users {
+				user := user.(map[string]any)
+				id, ok := user["id"].(string)
+				require.True(t, ok)
+				require.NotEmpty(t, id)
+
+				ids = append(ids, id)
+			}
+
+			if tc.countCurrentPage != -1 {
+				require.Equal(t, tc.countCurrentPage, len(ids))
+			}
+
+			if tc.total != -1 {
+				if tc.firstId != "" && len(ids) > 0 {
+					assert.Equal(t, tc.firstId, ids[0])
+				}
+
+				if tc.lastId != "" && len(ids) > 0 {
+					assert.Equal(t, tc.lastId, ids[len(ids)-1])
+				}
+			}
+
+			if len(tc.expectedIds) != 0 && tc.total != -1 {
+				assert.ElementsMatch(t, tc.expectedIds, ids)
+			}
+
+			if tc.descSorting {
+				isDesc := slices.IsSortedFunc(ids, func(a, b string) int {
+					return cmp.Compare(b, a)
+				})
+				assert.True(t, isDesc, "expected roles sorted in descending order")
+			}
+		})
 	}
 }

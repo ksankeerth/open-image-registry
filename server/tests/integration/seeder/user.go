@@ -226,6 +226,13 @@ func (s *TestDataSeeder) SetAccountRecoveryReason(t *testing.T, recoveryID strin
 	require.NoError(t, err)
 }
 
+func (s *TestDataSeeder) DeleteAllNonAdminUsers(t *testing.T) {
+	t.Helper()
+
+	err := s.store.Users().DeleteAllNonAdminAccounts(context.Background())
+	require.NoError(t, err)
+}
+
 func (s *TestDataSeeder) checkUser(t *testing.T, identifier, role, email string,
 	locked bool) (exists bool, mismatch bool, userID string) {
 	t.Helper()

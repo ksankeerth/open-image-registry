@@ -46,4 +46,6 @@ type UserStore interface {
 	AreAccountsActive(ctx context.Context, userIds []string) (valid bool, err error)
 
 	RecordLastAccessedTime(ctx context.Context, userId string, t time.Time) error
+
+	DeleteAllNonAdminAccounts(ctx context.Context) error
 }
