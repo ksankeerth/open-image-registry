@@ -23,7 +23,7 @@ const SideMenuList = (props: SideMenuProps) => {
     });
     setMenuState(tempMenuState);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props]);
+  }, []);
 
   const navigate = useNavigate();
 
@@ -58,13 +58,6 @@ const SideMenuList = (props: SideMenuProps) => {
   const toggleSlimMode = () => {
     setIsSlimMode((prev) => !prev);
     // Collapse all menus when switching to slim mode
-    if (!isSlimMode) {
-      const collapsedState: { [key: string]: boolean } = {};
-      props.menus.forEach((m) => {
-        collapsedState[m.key] = false;
-      });
-      setMenuState(collapsedState);
-    }
   };
 
   return (
