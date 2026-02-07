@@ -16,23 +16,25 @@ const SideMenuList = (props: SideMenuProps) => {
   // Track thin/full mode
   const [isSlimMode, setIsSlimMode] = useState(false);
 
-  useEffect(() => {
-    const tempMenuState: { [key: string]: boolean } = {};
-    props.menus.forEach((m) => {
-      tempMenuState[m.key] = isMenuCollapsed(m);
-    });
-    setMenuState(tempMenuState);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const navigate = useNavigate();
-
   const isMenuCollapsed = (menu: MenuEntity): boolean => {
     return (
       props.selectedMenuKey === menu.key ||
       menu.children.map((c) => c.key).includes(props.selectedMenuKey)
     );
   };
+
+  useEffect(() => {
+    const tempMenuState: { [key: string]: boolean } = {};
+    props.menus.forEach((m) => {
+      tempMenuState[m.key] = isMenuCollapsed(m);
+    });
+    setTimeout(() => {
+      setMenuState(tempMenuState);
+    }, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.menus]);
+
+  const navigate = useNavigate();
 
   const handleMenuClick = (link: string) => {
     navigate(link);
@@ -57,7 +59,6 @@ const SideMenuList = (props: SideMenuProps) => {
 
   const toggleSlimMode = () => {
     setIsSlimMode((prev) => !prev);
-    // Collapse all menus when switching to slim mode
   };
 
   return (
