@@ -1,17 +1,15 @@
 export const CONSOLE_BREADCRUMP_MAP: Record<string, string> = {
-  '/console': 'Registry Console',
+  '/console/management': 'Management Console',
 
   // USER MANAGEMENT
-  '/console/user-management': 'User Management',
-  '/console/user-management/users': 'Users',
-  '/console/user-management/invitations': 'Invitations',
-  '/console/user-management/activity-log': 'Activity Log',
+  '/console/management/users': 'Users',
+  '/console/management/invitations': 'Invitations',
+  '/console/management/activity-log': 'Activity Log',
 
   // ACCESS MANAGEMENT
-  '/console/access-management': 'Access Management',
-  '/console/access-management/namespaces': 'Namespaces',
-  '/console/access-management/repositories': 'Repositories',
-  '/console/access-management/upstreams': 'Upstreams',
+  '/console/management/namespaces': 'Namespaces',
+  '/console/management/repositories': 'Repositories',
+  '/console/management/upstreams': 'Upstreams',
 
   // INTEGRATION
   '/console/integration': 'Integration',
