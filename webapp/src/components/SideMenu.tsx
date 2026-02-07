@@ -7,7 +7,7 @@ export type SideMenuProps = {
   menus: MenuEntity[];
   selectedMenuKey: string;
   availableHeight: number;
-  menuCollapsed: () => void;
+  // menuCollapsed: () => void;
 };
 
 const SideMenuList = (props: SideMenuProps) => {
@@ -23,13 +23,12 @@ const SideMenuList = (props: SideMenuProps) => {
     });
     setMenuState(tempMenuState);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props]);
+  }, []);
 
   const navigate = useNavigate();
 
   const isMenuCollapsed = (menu: MenuEntity): boolean => {
     return (
-      menu.collapsed ||
       props.selectedMenuKey === menu.key ||
       menu.children.map((c) => c.key).includes(props.selectedMenuKey)
     );
@@ -46,9 +45,9 @@ const SideMenuList = (props: SideMenuProps) => {
     }
 
     setMenuState((current) => {
-      if (!current[menu]) {
-        props.menuCollapsed();
-      }
+      // if (!current[menu]) {
+      //   props.menuCollapsed();
+      // }
       return {
         ...current,
         [menu]: !current[menu],
@@ -59,13 +58,6 @@ const SideMenuList = (props: SideMenuProps) => {
   const toggleSlimMode = () => {
     setIsSlimMode((prev) => !prev);
     // Collapse all menus when switching to slim mode
-    if (!isSlimMode) {
-      const collapsedState: { [key: string]: boolean } = {};
-      props.menus.forEach((m) => {
-        collapsedState[m.key] = false;
-      });
-      setMenuState(collapsedState);
-    }
   };
 
   return (
