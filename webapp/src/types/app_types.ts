@@ -97,7 +97,6 @@ export type MenuEntity = {
   description: string;
   nav_link: string;
   icon_class?: string;
-  collapsed?: boolean;
   children: MenuEntity[];
 };
 

@@ -7,7 +7,7 @@ export type SideMenuProps = {
   menus: MenuEntity[];
   selectedMenuKey: string;
   availableHeight: number;
-  menuCollapsed: () => void;
+  // menuCollapsed: () => void;
 };
 
 const SideMenuList = (props: SideMenuProps) => {
@@ -29,7 +29,6 @@ const SideMenuList = (props: SideMenuProps) => {
 
   const isMenuCollapsed = (menu: MenuEntity): boolean => {
     return (
-      menu.collapsed ||
       props.selectedMenuKey === menu.key ||
       menu.children.map((c) => c.key).includes(props.selectedMenuKey)
     );
@@ -46,9 +45,9 @@ const SideMenuList = (props: SideMenuProps) => {
     }
 
     setMenuState((current) => {
-      if (!current[menu]) {
-        props.menuCollapsed();
-      }
+      // if (!current[menu]) {
+      //   props.menuCollapsed();
+      // }
       return {
         ...current,
         [menu]: !current[menu],

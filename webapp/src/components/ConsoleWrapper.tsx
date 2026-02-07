@@ -45,9 +45,9 @@ const ConsoleWrapper = (props: ConsoleWrapperProps) => {
     }
   }, [location.pathname, navigate, props.basePath, props.defaultPath]);
 
-  const menuCollapsed = () => {
-    // calculateHeight();
-  };
+  // const menuCollapsed = () => {
+  //   // calculateHeight();
+  // };
 
   return (
     <div className="flex flex-column min-w-screen max-w-screen">
@@ -55,7 +55,7 @@ const ConsoleWrapper = (props: ConsoleWrapperProps) => {
         <SideMenuList
           menus={props.menus}
           selectedMenuKey={selectedMenuKey}
-          menuCollapsed={menuCollapsed}
+          // menuCollapsed={menuCollapsed}
           availableHeight={availableHeight}
         />
         <div

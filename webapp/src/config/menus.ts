@@ -8,7 +8,6 @@ export const MGMT_CONSOLE_MENUS: MenuEntity[] = [
     nav_link: '/console/management',
     description: 'Manage users, invitations, and monitor user activity',
     icon_class: 'pi-users',
-    collapsed: true,
     children: [
       {
         name: 'Users',
