@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/ksankeerth/open-image-registry/constants"
 	"github.com/ksankeerth/open-image-registry/tests/integration/helpers"
 	"github.com/ksankeerth/open-image-registry/tests/testdata"
 	"github.com/stretchr/testify/require"
@@ -27,7 +28,13 @@ func (s *TestDataSeeder) GrantAccess(t *testing.T, resourceID, resourceType, use
 	reqBody, err := json.Marshal(body)
 	require.NoError(t, err, "failed to marshal grant access body")
 
-	url := fmt.Sprintf("%s%s", s.baseURL, fmt.Sprintf(testdata.EndpointNamespaceUsers, resourceID))
+	var url string
+	switch resourceType {
+	case constants.ResourceTypeRepository:
+		url = fmt.Sprintf("%s%s", s.baseURL, fmt.Sprintf(testdata.EndpointRepositoryUsers, resourceID))
+	case constants.ResourceTypeNamespace:
+		url = fmt.Sprintf("%s%s", s.baseURL, fmt.Sprintf(testdata.EndpointNamespaceUsers, resourceID))
+	}
 
 	// 1. Create the request object manually instead of using http.Post
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqBody))

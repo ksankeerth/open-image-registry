@@ -300,7 +300,7 @@ func (b *ListQueryBuilder) buildFilter(filter Filter, argIndex int) (whereAppend
 			// invalid OR
 			return "", argIndex, []any{}
 		}
-		return fmt.Sprintf(" (%s OR %s) ", leftWhereAppend, rightWhereAppend), rightArgIndex, append(leftArgs, rightArgs)
+		return fmt.Sprintf(" (%s OR %s) ", leftWhereAppend, rightWhereAppend), rightArgIndex, append(leftArgs, rightArgs...)
 	case OpIn:
 		if len(filter.Values) == 0 {
 			return "", argIndex, []any{}

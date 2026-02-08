@@ -22,7 +22,6 @@ type CreateRepositoryRequest struct {
 	Description string `json:"description"`
 	IsPublic    bool   `json:"is_public"`
 	NamespaceId string `json:"namespace_id"`
-	CreatedBy   string `json:"created_by"`
 }
 
 type CreateRepositoryResponse struct {
@@ -42,6 +41,5 @@ type RepositoryResponse struct {
 }
 
 type UpdateRepositoryRequest struct {
-	ID          string `json:"id"`
 	Description string `json:"description"`
 }

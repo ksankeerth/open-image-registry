@@ -54,29 +54,35 @@ func (svc *repositoryService) createRepository(reqCtx context.Context, req *mgmt
 	}
 
 	if ns == nil {
+		log.Logger().Warn().Msg("Repository creation failed due to missing or invalid namespace")
 		res.invalidNs = true
 		res.errMsg = "Namespace not found"
 		return res, nil
 	}
 
 	if !ns.IsPublic && req.IsPublic {
+		log.Logger().Warn().Msg("Not allowed to create a public repository under private namespace")
 		res.visiblityIssue = true
 		res.errMsg = "Not allowed to create a public repository under private namespace"
 		return res, nil
 	}
 
 	if ns.State == constants.ResourceStateDeprecated || ns.State == constants.ResourceStateDisabled {
+		log.Logger().Warn().Msg("Not allowed to create repositories under disabled or deprecated namespace")
 		res.invalidNs = true
-		res.errMsg = "Not allowed create repositories under disabled or deprecated namespace"
+		res.errMsg = "Not allowed to create repositories under disabled or deprecated namespace"
 		return res, nil
 	}
 
-	creator, err := svc.store.Users().Get(ctx, req.CreatedBy)
+	createdBy := reqCtx.Value(constants.ContextUsername).(string)
+
+	creator, err := svc.store.Users().Get(ctx, createdBy)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("Creating repository failed due to database errors")
 		return nil, err
 	}
 	if creator == nil {
+		log.Logger().Warn().Msg("Repository creator not found")
 		res.creatorNotFound = true
 		res.errMsg = "Creator not found"
 		return res, nil
@@ -96,7 +102,7 @@ func (svc *repositoryService) createRepository(reqCtx context.Context, req *mgmt
 	}
 
 	id, err := svc.store.Repositories().Create(ctx, constants.HostedRegistryID, req.NamespaceId, req.Name, req.Description, req.IsPublic,
-		req.CreatedBy)
+		createdBy)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Creating repository failed due to database errrors: %s:%s", req.NamespaceId, req.Name)
 		return nil, err
@@ -148,12 +154,53 @@ func (svc *repositoryService) getRepository(reqCtx context.Context, identifier, 
 	}
 }
 
-func (svc *repositoryService) deleteRepository(reqCtx context.Context, identifier, namespaceId string) error {
-	if namespaceId == "" {
-		return svc.store.Repositories().Delete(reqCtx, identifier)
-	} else {
-		return svc.store.Repositories().DeleteByIdentifier(reqCtx, identifier, namespaceId)
+func (svc *repositoryService) deleteRepository(reqCtx context.Context, identifier, namespaceId string) (notFound bool, err error) {
+	tx, err := svc.store.Begin(reqCtx)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to delete repository due to transactions errors")
+		return false, err
 	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	ctx := store.WithTxContext(reqCtx, tx)
+
+	if namespaceId == "" {
+		exists, err := svc.store.Repositories().Exists(ctx, identifier)
+		if err != nil {
+			log.Logger().Error().Err(err).Msgf("Failed to check repository existence while attempting to delete repository: %s", identifier)
+			return false, err
+		}
+		if !exists {
+			return true, nil
+		}
+		err = svc.store.Repositories().Delete(ctx, identifier)
+		if err != nil {
+			log.Logger().Error().Err(err).Msgf("Failed to delete repository: %s", identifier)
+			return false, err
+		}
+
+	} else {
+		exists, err := svc.store.Repositories().ExistsByIdentifier(ctx, namespaceId, identifier)
+		if err != nil {
+			log.Logger().Error().Err(err).Msgf("Failed to check repository existence while attempting to delete repository: %s", identifier)
+			return false, err
+		}
+		if !exists {
+			return true, nil
+		}
+		err = svc.store.Repositories().DeleteByIdentifier(reqCtx, identifier, namespaceId)
+		if err != nil {
+			log.Logger().Error().Err(err).Msgf("Failed to delete repository: %s", identifier)
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 func (svc *repositoryService) updateRepsitory(reqCtx context.Context, id string, req *mgmt.UpdateRepositoryRequest) (notFound bool, err error) {
@@ -229,13 +276,29 @@ func (svc *repositoryService) changeState(reqCtx context.Context, id string, new
 	if repo.State == newState {
 		log.Logger().Debug().Msgf("No changes in state. Updating state of repository(%s) is skipped", id)
 		result.success = true
-		return nil, nil
+		return result, nil
+	}
+
+	if repo.State == constants.ResourceStateDisabled {
+		log.Logger().Debug().Msgf("No state change is allowed to disabled repository")
+		result.success = false
+		result.httpErrorMsg = "No state change is allowed to disabled repository"
+		result.httpStatusCode = http.StatusUnprocessableEntity
+		return result, nil
+	}
+
+	if repo.State == constants.ResourceStateDeprecated && newState == constants.ResourceStateActive {
+		log.Logger().Debug().Msgf("Cannot change state to 'Active' from 'Deprecated'")
+		result.success = false
+		result.httpErrorMsg = "Not allowed to change state from 'Deprecated' to 'Active'"
+		result.httpStatusCode = http.StatusUnprocessableEntity
+		return result, nil
 	}
 
 	if repo.State == constants.ResourceStateActive && newState == constants.ResourceStateDisabled {
 		log.Logger().Warn().Msgf("Not allowed to change repository(%s) state from 'Active' to 'Disabled'", id)
 		result.httpErrorMsg = "Not allowed to change repository state from 'Active' to 'Disabled'"
-		result.httpStatusCode = http.StatusForbidden
+		result.httpStatusCode = http.StatusUnprocessableEntity
 		return result, nil
 	}
 
@@ -256,7 +319,7 @@ func (svc *repositoryService) changeState(reqCtx context.Context, id string, new
 	if ns.State == constants.ResourceStateDisabled {
 		result.success = false
 		result.httpErrorMsg = "Not allowed to change state of a repository when namespace is in disabled state"
-		result.httpStatusCode = http.StatusForbidden
+		result.httpStatusCode = http.StatusUnprocessableEntity
 		log.Logger().Warn().Msgf("Not allowed to change state of a repository when namespace is in disabled state: %s", id)
 		return
 	}
@@ -264,7 +327,7 @@ func (svc *repositoryService) changeState(reqCtx context.Context, id string, new
 	if ns.State == constants.ResourceStateDeprecated && newState == constants.ResourceStateActive {
 		result.success = false
 		result.httpErrorMsg = "Not allowed to change state of a repository to 'active' when namespace is in deprecated state"
-		result.httpStatusCode = http.StatusForbidden
+		result.httpStatusCode = http.StatusUnprocessableEntity
 		log.Logger().Warn().Msgf("Not allowed to change state of a repository to 'active' when namespace is in deprecated state: %s", id)
 		return
 	}
@@ -281,6 +344,7 @@ func (svc *repositoryService) changeState(reqCtx context.Context, id string, new
 
 func (svc *repositoryService) changeVisiblity(reqCtx context.Context, id string, public bool) (result *patchResult,
 	err error) {
+	result = &patchResult{}
 	tx, err := svc.store.Begin(reqCtx)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("Failed to change visibility of repository due to transaction errors")
@@ -334,8 +398,16 @@ func (svc *repositoryService) changeVisiblity(reqCtx context.Context, id string,
 	if ns.State == constants.ResourceStateDisabled || repo.State == constants.ResourceStateDisabled {
 		result.success = false
 		result.httpErrorMsg = "Not allowed to change visibility of a repository when namespace or repository is in disabled state"
-		result.httpStatusCode = http.StatusForbidden
+		result.httpStatusCode = http.StatusUnprocessableEntity
 		log.Logger().Warn().Msgf("Not allowed to change state of a repository when namespace or visibility is in disabled state: %s", id)
+		return
+	}
+
+	if !ns.IsPublic && public {
+		log.Logger().Warn().Msg("Not allowed to change visiblity to 'public' of a repository if it is under a private namespace")
+		result.success = false
+		result.httpErrorMsg = "Not allowed to change visiblity of a repository to 'public'  if it is under a private namespace"
+		result.httpStatusCode = http.StatusUnprocessableEntity
 		return
 	}
 
@@ -350,128 +422,56 @@ func (svc *repositoryService) changeVisiblity(reqCtx context.Context, id string,
 }
 
 type grantAccessResult struct {
-	conflict            bool // conflict with existing resource access
-	userNotFound        bool
-	grantedUserNotFound bool
-	resourceNotFound    bool
-	bodyURLMismatch     bool // true if id in url doesn't match with ID provided in request
+	statusCode int
+	errMsg     string
 }
 
-func (svc *repositoryService) grantAccess(reqCtx context.Context, id string, req *mgmt.AccessGrantRequest) (result *grantAccessResult, err error) {
+func (svc *repositoryService) grantAccess(reqCtx context.Context, req *mgmt.AccessGrantRequest) (result *grantAccessResult, err error) {
 	result = &grantAccessResult{}
-	if id != req.ResourceID {
-		result.bodyURLMismatch = true
-		return result, nil
+
+	// TODO Better use to same transaction for retriving user id and access manager
+	granter, err := svc.store.Users().GetByUsername(reqCtx, req.GrantedBy)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Error occurred when finding granter's user")
+		return nil, err
+	}
+	if granter == nil {
+		return nil, fmt.Errorf("granter user not found: %s", req.GrantedBy)
 	}
 
-	tx, err := svc.store.Begin(reqCtx)
+	reason, err := svc.accessManager.GrantAccess(reqCtx, req.ResourceID, req.ResourceType, granter.Id, req.UserID, req.AccessLevel)
 	if err != nil {
-		log.Logger().Error().Err(err).Msg("Granting repository access to user failed to due to transaction errors")
+		log.Logger().Error().Err(err).Msg("Granting repository access failed due to errors")
 		return nil, err
 	}
 
-	ctx := store.WithTxContext(reqCtx, tx)
-
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
-		}
-	}()
-
-	user, err := svc.store.Users().Get(ctx, req.UserID)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Granting repository access failed due to database errors")
-		return nil, err
-	}
-
-	if user == nil {
-		result.userNotFound = true
-		return result, nil
-	}
-
-	grantedUser, err := svc.store.Users().GetByUsername(ctx, req.GrantedBy)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Granting repository access failed due to database errors")
-		return nil, err
-	}
-
-	if grantedUser == nil {
-		result.grantedUserNotFound = true
-		return result, nil
-	}
-
-	ns, err := svc.store.Repositories().Get(ctx, req.ResourceID)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Granting repository access failed due to database errors")
-		return nil, err
-	}
-	if ns == nil {
-		result.resourceNotFound = true
-		return result, nil
-	}
-
-	access, err := svc.store.Access().GetUserAccess(ctx, req.ResourceID, req.ResourceType, req.UserID)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Granting repository access failed due to database errors")
-		return nil, err
-	}
-
-	if access != nil {
-		result.conflict = true
-		return result, nil
-	}
-
-	_, err = svc.store.Access().GrantAccess(ctx, req.ResourceID, req.ResourceType, req.UserID, req.GrantedBy,
-		req.AccessLevel)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Granting repository access failed due to database errors")
-		return nil, err
-	}
-
+	result.statusCode, result.errMsg = reason.MapToHTTP(false)
 	return result, nil
 }
 
-func (svc *repositoryService) revokeAccess(reqCtx context.Context, id string, req *mgmt.AccessRevokeRequest) (notFound bool,
-	mismatch bool, err error) {
+func (svc *repositoryService) revokeAccess(reqCtx context.Context, req *mgmt.AccessRevokeRequest) (status int, msg string, err error) {
 
-	if id != req.ResourceID {
-		return false, true, nil
-	}
+	// assume that revokerUsername never be empty
+	revokerUsername := reqCtx.Value(constants.ContextUsername).(string)
 
-	tx, err := svc.store.Begin(reqCtx)
+	// TODO Better use to same transaction for retriving user id and access manager
+	revoker, err := svc.store.Users().GetByUsername(reqCtx, revokerUsername)
 	if err != nil {
-		log.Logger().Error().Err(err).Msg("Revoking repository access failed to due to transaction errors")
-		return false, false, err
+		log.Logger().Error().Err(err).Msg("Error occurred when finding revoker")
+		return 500, "", err
+	}
+	if revoker == nil {
+		return 500, "", fmt.Errorf("revoker not found: %s", revokerUsername)
 	}
 
-	ctx := store.WithTxContext(reqCtx, tx)
-
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
-		}
-	}()
-
-	ns, err := svc.store.Repositories().Get(ctx, req.ResourceID)
+	reason, err := svc.accessManager.RevokeAccess(reqCtx, req.ResourceID, req.ResourceType, req.UserID, revoker.Id)
 	if err != nil {
-		log.Logger().Error().Err(err).Msg("Revoking repository access failed due to database errors")
-		return false, false, err
-	}
-	if ns == nil {
-		return true, false, nil
+		log.Logger().Error().Err(err).Msgf("Unable to revoke repository access(%s:%s) to user(%s)", req.ResourceType, req.ResourceID, req.UserID)
+		return 500, "", err
 	}
 
-	err = svc.store.Access().RevokeAccess(ctx, req.ResourceID, req.ResourceType, req.UserID)
-	if err != nil {
-		log.Logger().Error().Err(err).Msg("Revoking repository access failed due to database errors")
-		return false, false, err
-	}
-
-	return false, false, nil
+	status, msg = reason.MapToHTTP(false)
+	return
 }
 
 func (svc *repositoryService) listUsers(reqCtx context.Context, id string, cond *store.ListQueryConditions) (accesses []*models.ResourceAccessView,
@@ -521,12 +521,12 @@ func (svc *repositoryService) listUsers(reqCtx context.Context, id string, cond 
 					Field: "",
 					Values: []any{
 						store.Filter{
-							Field:    constants.FilterFieldNamespaceID,
+							Field:    constants.FilterFieldResourceID,
 							Values:   []any{ns.Id},
 							Operator: store.OpEqual,
 						},
 						store.Filter{
-							Field:    constants.FilterFieldRepositoryID,
+							Field:    constants.FilterFieldResourceID,
 							Values:   []any{id},
 							Operator: store.OpEqual,
 						},
@@ -546,12 +546,12 @@ func (svc *repositoryService) listUsers(reqCtx context.Context, id string, cond 
 					Field: "",
 					Values: []any{
 						store.Filter{
-							Field:    constants.FilterFieldNamespaceID,
+							Field:    constants.FilterFieldResourceID,
 							Values:   []any{ns.Id},
 							Operator: store.OpEqual,
 						},
 						store.Filter{
-							Field:    constants.FilterFieldRepositoryID,
+							Field:    constants.FilterFieldResourceID,
 							Values:   []any{id},
 							Operator: store.OpEqual,
 						},
@@ -564,12 +564,12 @@ func (svc *repositoryService) listUsers(reqCtx context.Context, id string, cond 
 				Field: "",
 				Values: []any{
 					store.Filter{
-						Field:    constants.FilterFieldNamespaceID,
+						Field:    constants.FilterFieldResourceID,
 						Values:   []any{ns.Id},
 						Operator: store.OpEqual,
 					},
 					store.Filter{
-						Field:    constants.FilterFieldRepositoryID,
+						Field:    constants.FilterFieldResourceID,
 						Values:   []any{id},
 						Operator: store.OpEqual,
 					},

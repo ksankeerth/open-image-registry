@@ -355,32 +355,37 @@ func (m *Manager) GetUserAccessByLevels(ctx context.Context, userId string, page
 }
 
 func (m *Manager) getResourceInfo(ctx context.Context, resourceType, id string) (exists bool,
-	state string, err error) {
+	state, parentState string, err error) {
 	switch resourceType {
 	case constants.ResourceTypeNamespace:
 		ns, err := m.store.Namespaces().Get(ctx, id)
 		if err != nil {
-			return false, "", err
+			return false, "", "", err
 		}
 		if ns == nil {
-			return false, "", nil
+			return false, "", "", nil
 		}
-		return true, ns.State, nil
+		return true, ns.State, "", nil
 	case constants.ResourceTypeRepository:
 		repo, err := m.store.Repositories().Get(ctx, id)
 		if err != nil {
-			return false, "", err
+			return false, "", "", err
 		}
 		if repo == nil {
-			return false, "", nil
+			return false, "", "", nil
 		}
-		return true, repo.State, nil
+
+		ns, err := m.store.Namespaces().Get(ctx, repo.NamespaceID)
+		if err != nil {
+			return false, "", "", err
+		}
+		return true, repo.State, ns.State, nil
 	case constants.ResourceTypeUpstream:
 		// TODO: Implement later
-		return false, "", nil
+		return false, "", "", nil
 	}
 
-	return false, "", fmt.Errorf("invalid resource type")
+	return false, "", "", fmt.Errorf("invalid resource type")
 }
 
 func (m *Manager) verifyInitiatorAuthority(ctx context.Context, grantorID, accessLevel, resourceType, resourceId string) (ok bool,
@@ -447,7 +452,8 @@ func (m *Manager) verifyInitiatorAuthority(ctx context.Context, grantorID, acces
 
 func (m *Manager) verifyResource(ctx context.Context, resourceID, resourceType string) (ok bool,
 	reason AccessOpFailure, err error) {
-	exists, state, err := m.getResourceInfo(ctx, resourceType, resourceID)
+
+	exists, state, parentState, err := m.getResourceInfo(ctx, resourceType, resourceID)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("Granting resource access failed when verifying resource")
 		return false, UnexpectedError, err
@@ -459,6 +465,11 @@ func (m *Manager) verifyResource(ctx context.Context, resourceID, resourceType s
 	if state == constants.ResourceStateDisabled {
 		return false, ResourceDisabled, nil
 	}
+
+	if parentState == constants.ResourceStateDisabled {
+		return false, ResourceDisabled, nil
+	}
+
 	return true, 0, nil
 }
 
