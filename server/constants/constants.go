@@ -7,9 +7,9 @@ const ResourceStateActive = "Active"
 const ResourceStateDeprecated = "Deprecated"
 const ResourceStateDisabled = "Disabled"
 
-const ResourceTypeNamespace = "namespace"
-const ResourceTypeRepository = "repository"
-const ResourceTypeUpstream = "upstream"
+const ResourceTypeNamespace = "Namespace"
+const ResourceTypeRepository = "Repository"
+const ResourceTypeUpstream = "Upstream"
 
 const AccessLevelMaintainer = "Maintainer"
 const AccessLevelDeveloper = "Developer"
