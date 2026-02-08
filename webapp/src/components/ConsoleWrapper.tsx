@@ -34,6 +34,7 @@ const ConsoleWrapper = (props: ConsoleWrapperProps) => {
         const pathLabel = CONSOLE_BREADCRUMP_MAP[fullPath];
         breadcrumbs.push({
           label: pathLabel,
+          command: () => navigate(fullPath),
         });
       }
     });
@@ -81,7 +82,7 @@ const ConsoleWrapper = (props: ConsoleWrapperProps) => {
           <div className="pt-4 pl-2">
             <BreadCrumb
               model={breadcrumpList}
-              className="bg-offwhite border-none text-sm font-medium p-0 m-0"
+              className="bg-offwhite border-none text-sm font-medium p-0 m-0 pb-1"
               separatorIcon={<span className="pi pi-chevron-right text-xs" />}
             />
           </div>
