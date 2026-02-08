@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Outlet, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import SideMenuList from './SideMenu';
 import { BreadCrumb } from 'primereact/breadcrumb';
 import { MenuEntity } from '../types/app_types';
 import { MenuItem } from 'primereact/menuitem';
+import { CONSOLE_BREADCRUMP_MAP } from '../config/breadcrump';
 
 type ConsoleWrapperProps = {
   menus: MenuEntity[];
@@ -18,11 +19,27 @@ const ConsoleWrapper = (props: ConsoleWrapperProps) => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [breadcrumpList, setBreadcrumpList] = useState<MenuItem[]>([
-    { label: 'Home' },
-    { label: 'Managment Console' },
-    { label: 'Users' },
-  ]);
+  // Create breadcrumb list based on current path
+  const breadcrumpList = useMemo(() => {
+    const paths = location.pathname.split('/').filter((path) => path);
+    const breadcrumbs: MenuItem[] = [
+      {
+        label: 'Home',
+        command: () => navigate('/'),
+      },
+    ];
+    paths.forEach((_path, index) => {
+      const fullPath = `/${paths.slice(0, index + 1).join('/')}`;
+      if (!(fullPath === '/console')) {
+        const pathLabel = CONSOLE_BREADCRUMP_MAP[fullPath];
+        breadcrumbs.push({
+          label: pathLabel,
+          command: () => navigate(fullPath),
+        });
+      }
+    });
+    return breadcrumbs;
+  }, [location.pathname, navigate]);
 
   const selectedMenuKey = useMemo(() => {
     const currentPath = location.pathname;
@@ -65,7 +82,7 @@ const ConsoleWrapper = (props: ConsoleWrapperProps) => {
           <div className="pt-4 pl-2">
             <BreadCrumb
               model={breadcrumpList}
-              className="bg-offwhite border-none text-sm font-medium p-0 m-0"
+              className="bg-offwhite border-none text-sm font-medium p-0 m-0 pb-1"
               separatorIcon={<span className="pi pi-chevron-right text-xs" />}
             />
           </div>
