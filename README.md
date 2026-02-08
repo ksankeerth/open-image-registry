@@ -76,5 +76,6 @@ We're actively developing Open Image Registry and welcome contributions!
 Since the project is currently under development, many features may change quickly.
 We have some guides which will supports how the features will evoles. You can refer to guides below.
 
+- [Management API Specification](./docs/oir-management-api-spec-v1.yaml)
 - [User Management](./docs/user-management.md)
 - [Access Management](./docs/access-management.md)

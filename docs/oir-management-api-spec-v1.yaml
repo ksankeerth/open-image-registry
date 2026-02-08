@@ -849,6 +849,7 @@ paths:
 
   /resource/namespaces/{id}/users:
     get:
+      operationId: getNamespaceUsers
       tags: [Namespaces]
       summary: List users with access to namespace
       description: Retrieve a paginated list of users who have access to the namespace.
@@ -1042,6 +1043,594 @@ paths:
                   $ref: '#/components/schemas/ErrorResponse'
           '500':
             $ref: '#/components/responses/InternalError'
+
+  /resource/repositories:
+    get:
+      tags: [Repositories]
+      summary: List and filter repositories
+      description: |
+        Retrieve a paginated list of container repositories with optional filtering, sorting, and searching.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+        - $ref: '#/components/parameters/SortOrder'
+        - $ref: '#/components/parameters/SearchQuery'
+        - name: sort_by
+          in: query
+          description: Sort field
+          schema:
+            type: string
+            default: name
+            enum:
+              - name
+              - created_at
+              - updated_at
+        - name: order
+          in: query
+          schema: { type: string, enum: [asc, desc] }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string, enum: [Active, Deprecated, Disabled] }
+        - name: is_public
+          in: query
+          schema: { type: boolean }
+        - name: namespace_id
+          in: query
+          description: Filter by namespace ID
+          schema: { type: string }
+        - name: tags
+          in: query
+          description: |
+            Filter by tag count range. Supports comparison operators:
+            - Single value: ">10" or "<100"
+            - Range: Both ">10" and "<100" together
+            Cannot use two ">" or two "<" operators together.
+          schema: { type: string }
+          examples:
+            greaterThan:
+              value: ">10"
+              summary: Repositories with more than 10 tags
+            lessThan:
+              value: "<100"
+              summary: Repositories with fewer than 100 tags
+      responses:
+        '200':
+          description: List of repositories retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedBase'
+                  - type: object
+                    properties:
+                      entities:
+                        type: array
+                        items: { $ref: '#/components/schemas/RepositoryViewDTO' }
+        '400':
+          description: Invalid filter or sort field
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                invalidSortField:
+                  value:
+                    code: 400
+                    error_message: 'Not allowed sort field: invalid_field'
+                invalidFilterField:
+                  value:
+                    code: 400
+                    error_message: 'Not allowed filter field: unknown_field'
+                invalidBooleanFilter:
+                  value:
+                    code: 400
+                    error_message: 'Boolean value is only accepted for field `is_public`: [true, false]'
+                invalidTagsRange:
+                  value:
+                    code: 400
+                    error_message: '`tags` range filter can have only 2 values at maximum: [">10", ">20", "<100"]'
+                invalidTagsOperators:
+                  value:
+                    code: 400
+                    error_message: '`tags` range filter invalid values: [">10", ">20"]'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+    post:
+      tags: [Repositories]
+      summary: Create a new repository
+      description: |
+        Create a new container repository within a namespace.
+        
+        **Requirements:**
+        - Namespace must exist and be in Active state
+        - Creator user must exist
+        - Repository name must be unique within the namespace
+        - Repository name must match pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+        
+        **Visibility rules:**
+        - Public repositories can only be created under public namespaces
+        - Private repositories can be created under any namespace
+        
+        **State rules:**
+        - Cannot create repositories under Deprecated namespaces
+        - Cannot create repositories under Disabled namespaces
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateRepositoryRequest' }
+      responses:
+        '201':
+          description: Repository created successfully
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateRepositoryResponse' }
+        '400': 
+          description: Bad request - invalid JSON body or invalid repository name
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                invalidJson:
+                  value:
+                    code: 400
+                    error_message: 'Bad request'
+                invalidName:
+                  value:
+                    code: 400
+                    error_message: 'Invalid Repository name'
+                invalidNamespace:
+                  value:
+                    code: 400
+                    error_message: 'Invalid Namespace'
+                invalidCreator:
+                  value:
+                    code: 400
+                    error_message: 'Invalid created user'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': 
+          description: Repository name already exists in the namespace
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example:
+                code: 409
+                error_message: 'Same repository name is used by another repository'
+        '422':
+          description: Unprocessable entity - validation failures
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                namespaceNotFound:
+                  value:
+                    code: 422
+                    error_message: 'Namespace not found'
+                creatorNotFound:
+                  value:
+                    code: 422
+                    error_message: 'Creator not found'
+                visibilityIssue:
+                  value:
+                    code: 422
+                    error_message: 'Not allowed to create a public repository under private namespace'
+                deprecatedNamespace:
+                  value:
+                    code: 422
+                    error_message: 'Not allowed create repositories under disabled or deprecated namespace'
+                disabledNamespace:
+                  value:
+                    code: 422
+                    error_message: 'Not allowed create repositories under disabled or deprecated namespace'
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /resource/repositories/{id}:
+    head:
+      tags: [Repositories]
+      summary: Check if repository exists
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Repository ID
+      responses:
+        '200': { description: Repository exists }
+        '404': { description: Repository not found }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+    get:
+      tags: [Repositories]
+      summary: Get repository details
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Repository ID
+      responses:
+        '200':
+          description: 'OK'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RepositoryResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+    put:
+      tags: [Repositories]
+      summary: Update repository
+      description: Update repository description
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Repository ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateRepositoryRequest' }
+      responses:
+        '200': { description: Repository updated successfully }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+    delete:
+      tags: [Repositories]
+      summary: Delete repository
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Repository ID
+      responses:
+        '200': { description: Repository deleted successfully }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /resource/repositories/{id}/visibility:
+    patch:
+      tags: [Repositories]
+      summary: Change repository visibility
+      description: |
+        Change whether a repository is public or private.
+        
+        **Rules:**
+        - Cannot make repository public if parent namespace is private
+        - Cannot change visibility if repository or namespace is disabled
+        - No-op if visibility is already set to the requested value
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Repository ID
+
+        - name: public
+          in: query
+          required: true
+          schema: { type: boolean }
+          description: Whether repository should be public
+
+      responses:
+        '200':
+          description: Visibility changed successfully or no-op if already set
+
+        '400':
+          description: Invalid query parameter
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example:
+                code: 400
+                error_message: 'Invalid query param'
+
+        '404':
+          description: Repository not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+        '403':
+          description: Visibility change not allowed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example:
+                code: 403
+                error_message: 'Not allowed to change visibility of a repository when namespace or repository is in disabled state'
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /resource/repositories/{id}/state:
+    patch:
+      tags: [Repositories]
+      summary: Change repository state
+      description: |
+        Change the lifecycle state of a repository.
+        
+        **Transition rules:**
+        - Cannot transition from Active to Disabled directly
+        - Cannot change state if namespace is disabled
+        - Cannot change to Active if namespace is deprecated
+        - No-op if state is already set to the requested value
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Repository ID
+
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [Active, Deprecated, Disabled]
+          description: New repository state
+
+      responses:
+        '200':
+          description: State changed successfully or no-op if same state
+
+        '400':
+          description: Invalid or missing state query parameter
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                missing:
+                  value:
+                    code: 400
+                    error_message: 'Missing query param state in request'
+                invalid:
+                  value:
+                    code: 400
+                    error_message: 'Invalid repository state'
+
+        '404':
+          description: Repository not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+        '403':
+          description: State transition not allowed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                activeToDisabled:
+                  value:
+                    code: 403
+                    error_message: "Not allowed to change repository state from 'Active' to 'Disabled'"
+                namespaceDisabled:
+                  value:
+                    code: 403
+                    error_message: "Not allowed to change state of a repository when namespace is in disabled state"
+                namespaceDeprecated:
+                  value:
+                    code: 403
+                    error_message: "Not allowed to change state of a repository to 'active' when namespace is in deprecated state"
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /resource/repositories/{id}/users:
+    get:
+      operationId: getRepositoryUsers
+      tags: [Repositories]
+      summary: List users with access to repository
+      description: |
+        Retrieve a paginated list of users who have access to the repository.
+        This includes both direct repository access and inherited namespace access.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Repository ID
+
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+        - $ref: '#/components/parameters/SortOrder'
+        - $ref: '#/components/parameters/SearchQuery'
+
+        - name: access_level
+          in: query
+          schema:
+            type: string
+            enum: [Guest, Developer, Maintainer]
+          description: Filter by access level (includes inherited Maintainer from namespace)
+
+        - name: search
+          in: query
+          schema: { type: string }
+          description: Search by username
+
+        - name: sort_by
+          in: query
+          description: The field used to sort the results.
+          schema:
+            type: string
+            default: granted_at
+            enum:
+              - user
+              - granted_user
+              - granted_at
+
+      responses:
+        '200':
+          description: List of user accesses retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedBase'
+                  - type: object
+                    properties:
+                      entities:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ResourceAccessViewDTO'
+
+        '400':
+          description: Invalid filter or sort field
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+        '500': { $ref: '#/components/responses/InternalError' }
+
+    post:
+      tags: [Repositories, Access]
+      summary: Grant user access to repository
+      description: |
+        Grants a user access to a repository.
+
+        **Rules enforced:**
+        - resource_type must be `Repository`
+        - resource_id in body must match path `{id}`
+        - Only Guest and Developer access levels are allowed for repositories
+        - Access level must comply with user role hierarchy
+        - Existing access cannot be overwritten (returns 409)
+        - Granter must be authenticated user
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Repository ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessGrantRequest'
+            example:
+              resource_type: Repository
+              resource_id: repo-123
+              user_id: user-456
+              access_level: Developer
+              granted_by: admin-user
+      responses:
+        '200':
+          description: Access granted successfully
+        '400':
+          description: Invalid request body, resource_type not Repository, resource_id mismatch, or validation failure
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                badRequest:
+                  value:
+                    code: 400
+                    error_message: 'Bad request'
+                invalidUserId:
+                  value:
+                    code: 400
+                    error_message: 'Invalid user id'
+                invalidGrantedBy:
+                  value:
+                    code: 400
+                    error_message: 'Invalid grantedBy'
+                wrongResourceType:
+                  value:
+                    code: 400
+                    error_message: 'Resource is not Repository'
+                invalidResourceId:
+                  value:
+                    code: 400
+                    error_message: 'Invalid ResourceID'
+                invalidAccessLevel:
+                  value:
+                    code: 400
+                    error_message: 'Invalid Access Level'
+                resourceIdMismatch:
+                  value:
+                    code: 400
+                    error_message: "'identifier' in URL and body don't match"
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Not allowed to override existing access or granter mismatch
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                conflict:
+                  value:
+                    code: 403
+                    error_message: 'Not allowed to override existing access level for same resource and user'
+                granterMismatch:
+                  value:
+                    code: 403
+                    error_message: 'Grantor must be same as authenticated user!'
+        '404':
+          description: User, repository, or granter not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /resource/repositories/{id}/users/{userID}:
+    delete:
+      tags: [Repositories, Access]
+      summary: Revoke user access from repository
+      description: |
+        Revokes a user's direct access from a repository.
+        
+        **Note:** This only revokes direct repository access. Users may still have access through namespace-level permissions.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Repository ID
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+          description: User ID to revoke access from
+      responses:
+        '200':
+          description: Access revoked successfully
+        '400':
+          description: Invalid request or resource_type not Repository
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: Repository not found (user or access not found returns 200)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
 components:
   securitySchemes:
     cookieAuth:
@@ -1672,3 +2261,106 @@ components:
           type: string
         role:
           type: string
+
+    # ---- REPOSITORY SCHEMAS ----
+    CreateRepositoryRequest:
+      type: object
+      required:
+        - name
+        - namespace_id
+        - created_by
+      properties:
+        name:
+          type: string
+          pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+          description: Repository name (lowercase alphanumeric with hyphens, no leading/trailing hyphens)
+          example: my-app-repo
+        namespace_id:
+          type: string
+          description: Parent namespace ID
+          example: ns-123
+        description:
+          type: string
+          description: Repository description
+          example: Application container images
+        is_public:
+          type: boolean
+          default: false
+          description: Whether the repository is publicly accessible
+        created_by:
+          type: string
+          description: User ID of the creator
+          example: user-456
+
+    CreateRepositoryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Created repository ID
+          example: repo-789
+
+    UpdateRepositoryRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          description: Updated repository description
+
+    RepositoryViewDTO:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        namespace_id:
+          type: string
+        namespace_name:
+          type: string
+        description:
+          type: string
+        is_public:
+          type: boolean
+        state:
+          type: string
+          enum: [Active, Deprecated, Disabled]
+        tag_count:
+          type: integer
+          description: Number of image tags in the repository
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RepositoryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        namespace_id:
+          type: string
+        namespace_name:
+          type: string
+        description:
+          type: string
+        is_public:
+          type: boolean
+        state:
+          type: string
+          enum: [Active, Deprecated, Disabled]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          description: User ID of the creator
+
+
