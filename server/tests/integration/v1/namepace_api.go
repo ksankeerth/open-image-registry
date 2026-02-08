@@ -348,7 +348,7 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 			body: map[string]any{
 				"user_id":       m2,
 				"access_level":  "Maintainer",
-				"resource_type": "Namespace",
+				"resource_type": "namespace", // Correct value is "Namespace"
 				"resource_id":   nsId,
 				"granted_by":    "admin",
 			},
@@ -359,7 +359,7 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 			body: map[string]any{
 				"user_id":       m2,
 				"access_level":  "Maintainer",
-				"resource_type": "namespace",
+				"resource_type": "Namespace",
 				"resource_id":   "non-existing-id",
 				"granted_by":    "admin",
 			},
@@ -371,7 +371,7 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 			body: map[string]any{
 				"user_id":       "non-existing-user",
 				"access_level":  "Maintainer",
-				"resource_type": "namespace",
+				"resource_type": "Namespace",
 				"resource_id":   nsId,
 				"granted_by":    "admin",
 			},
@@ -382,7 +382,7 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 			body: map[string]any{
 				"user_id":       g1,
 				"access_level":  "Guest",
-				"resource_type": "namespace",
+				"resource_type": "Namespace",
 				"resource_id":   nsId,
 				"granted_by":    "admin",
 			},
@@ -393,7 +393,7 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 			body: map[string]any{
 				"user_id":       g2,
 				"access_level":  "Developer",
-				"resource_type": "namespace",
+				"resource_type": "Namespace",
 				"resource_id":   nsId,
 				"granted_by":    "admin",
 			},
@@ -404,7 +404,7 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 			body: map[string]any{
 				"user_id":       g3,
 				"access_level":  "Maintainer",
-				"resource_type": "namespace",
+				"resource_type": "Namespace",
 				"resource_id":   nsId,
 				"granted_by":    "admin",
 			},
@@ -415,7 +415,7 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 			body: map[string]any{
 				"user_id":       d1,
 				"access_level":  "Guest",
-				"resource_type": "namespace",
+				"resource_type": "Namespace",
 				"resource_id":   nsId,
 				"granted_by":    "admin",
 			},
@@ -426,7 +426,7 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 			body: map[string]any{
 				"user_id":       d2,
 				"access_level":  "Developer",
-				"resource_type": "namespace",
+				"resource_type": "Namespace",
 				"resource_id":   nsId,
 				"granted_by":    "admin",
 			},
@@ -437,7 +437,7 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 			body: map[string]any{
 				"user_id":       d3,
 				"access_level":  "Maintainer",
-				"resource_type": "namespace",
+				"resource_type": "Namespace",
 				"resource_id":   nsId,
 				"granted_by":    "admin",
 			},
@@ -448,7 +448,7 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 			body: map[string]any{
 				"user_id":       a1,
 				"access_level":  "Guest",
-				"resource_type": "namespace",
+				"resource_type": "Namespace",
 				"resource_id":   nsId,
 				"granted_by":    "admin",
 			},
@@ -459,7 +459,7 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 			body: map[string]any{
 				"user_id":       a2,
 				"access_level":  "Developer",
-				"resource_type": "namespace",
+				"resource_type": "Namespace",
 				"resource_id":   nsId,
 				"granted_by":    "admin",
 			},
@@ -470,7 +470,7 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 			body: map[string]any{
 				"user_id":       a3,
 				"access_level":  "Maintainer",
-				"resource_type": "namespace",
+				"resource_type": "Namespace",
 				"resource_id":   nsId,
 				"granted_by":    "admin",
 			},
@@ -506,7 +506,7 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 		reqBody1, err := json.Marshal(map[string]any{
 			"user_id":       d4,
 			"access_level":  "Guest",
-			"resource_type": "namespace",
+			"resource_type": "Namespace",
 			"resource_id":   nsId,
 			"granted_by":    "admin"})
 		require.NoError(t, err)
@@ -525,7 +525,7 @@ func (n *NamespaceTestSuite) testNamespaceGrantAccess(t *testing.T) {
 		reqBody2, err := json.Marshal(map[string]any{
 			"user_id":       d4,
 			"access_level":  "Developer",
-			"resource_type": "namespace",
+			"resource_type": "Namespace",
 			"resource_id":   nsId,
 			"granted_by":    "admin",
 		})
@@ -555,7 +555,7 @@ func (n *NamespaceTestSuite) testNamespaceRevokeAccess(t *testing.T) {
 	d1 := n.seeder.ProvisionUser(t, "nsrevokedev1", "nsrevokedev1@t.com", "Developer")
 	d2 := n.seeder.ProvisionUser(t, "nsrevokedev2", "nsrevokedev2@t.com", "Developer")
 
-	n.seeder.GrantAccess(t, nsId, "namespace", d1, "Developer")
+	n.seeder.GrantAccess(t, nsId, "Namespace", d1, "Developer")
 
 	tcs := []struct {
 		name       string
@@ -582,7 +582,7 @@ func (n *NamespaceTestSuite) testNamespaceRevokeAccess(t *testing.T) {
 			statusCode: http.StatusNotFound,
 		},
 		{
-			name: "Invalid resource_id",
+			name:       "Invalid resource_id",
 			userId:     d2,
 			resourceId: "invalid-namespaceid",
 			statusCode: http.StatusNotFound,
@@ -1204,43 +1204,43 @@ func (n *NamespaceTestSuite) testNamespaceUserAccessList(t *testing.T) {
 
 	m2 := n.seeder.ProvisionUser(t, "useraccess-maintainer2", "useraccess-maintainer2@t.com", "Maintainer")
 	require.NotEmpty(t, m2)
-	n.seeder.GrantAccess(t, n1, "namespace", m2, "Maintainer")
+	n.seeder.GrantAccess(t, n1, "Namespace", m2, "Maintainer")
 
 	m3 := n.seeder.ProvisionUser(t, "useraccess-maintainer3", "useraccess-maintainer3@t.com", "Maintainer")
 	require.NotEmpty(t, m3)
-	n.seeder.GrantAccess(t, n1, "namespace", m3, "Developer")
+	n.seeder.GrantAccess(t, n1, "Namespace", m3, "Developer")
 
 	d1 := n.seeder.ProvisionUser(t, "useraccess-developer1", "useraccess-developer1@t.com", "Developer")
 	require.NotEmpty(t, d1)
-	n.seeder.GrantAccess(t, n1, "namespace", d1, "Developer")
+	n.seeder.GrantAccess(t, n1, "Namespace", d1, "Developer")
 
 	d2 := n.seeder.ProvisionUser(t, "useraccess-developer2", "useraccess-developer2@t.com", "Developer")
 	require.NotEmpty(t, d2)
-	n.seeder.GrantAccess(t, n1, "namespace", d2, "Guest")
+	n.seeder.GrantAccess(t, n1, "Namespace", d2, "Guest")
 
 	d3 := n.seeder.ProvisionUser(t, "useraccess-developer3", "useraccess-developer3@t.com", "Developer")
 	require.NotEmpty(t, d3)
-	n.seeder.GrantAccess(t, n1, "namespace", d3, "Developer")
+	n.seeder.GrantAccess(t, n1, "Namespace", d3, "Developer")
 
 	d4 := n.seeder.ProvisionUser(t, "useraccess-developer4", "useraccess-developer4@t.com", "Developer")
 	require.NotEmpty(t, d4)
-	n.seeder.GrantAccess(t, n1, "namespace", d4, "Developer")
+	n.seeder.GrantAccess(t, n1, "Namespace", d4, "Developer")
 
 	g1 := n.seeder.ProvisionUser(t, "useraccess-guest1", "useraccess-guest1@t.com", "Guest")
 	require.NotEmpty(t, g1)
-	n.seeder.GrantAccess(t, n1, "namespace", g1, "Guest")
+	n.seeder.GrantAccess(t, n1, "Namespace", g1, "Guest")
 
 	g2 := n.seeder.ProvisionUser(t, "useraccess-guest2", "useraccess-guest2@t.com", "Guest")
 	require.NotEmpty(t, g2)
-	n.seeder.GrantAccess(t, n1, "namespace", g2, "Guest")
+	n.seeder.GrantAccess(t, n1, "Namespace", g2, "Guest")
 
 	g3 := n.seeder.ProvisionUser(t, "useraccess-guest3", "useraccess-guest3@t.com", "Guest")
 	require.NotEmpty(t, g3)
-	n.seeder.GrantAccess(t, n1, "namespace", g3, "Guest")
+	n.seeder.GrantAccess(t, n1, "Namespace", g3, "Guest")
 
 	g4 := n.seeder.ProvisionUser(t, "useraccess-guest4", "useraccess-guest4@t.com", "Guest")
 	require.NotEmpty(t, g4)
-	n.seeder.GrantAccess(t, n1, "namespace", g4, "Guest")
+	n.seeder.GrantAccess(t, n1, "Namespace", g4, "Guest")
 
 	tcs := []struct {
 		name             string
