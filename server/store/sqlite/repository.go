@@ -67,7 +67,7 @@ func (r *repositoryStore) Get(ctx context.Context, id string) (*models.Repositor
 	var createdAt, updatedAt string
 
 	var m models.RepositoryModel
-	err := row.Scan(&m.ID, &m.Name, &m.Description, &m.IsPublic, &m.NamespaceID, &m.RegistryID, &createdAt, &updatedAt)
+	err := row.Scan(&m.ID, &m.Name, &m.Description, &m.IsPublic, &m.State, &m.NamespaceID, &m.RegistryID, &createdAt, &updatedAt, &m.CreatedBy)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil // not found

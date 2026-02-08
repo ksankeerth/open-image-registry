@@ -2,6 +2,7 @@ package seeder
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -45,4 +46,18 @@ func (s *TestDataSeeder) CreateRepository(t *testing.T, name, description, creat
 	require.NotEmpty(t, respBody.Id)
 
 	return respBody.Id
+}
+
+func (s *TestDataSeeder) SetRepositoryDeprecated(t *testing.T, id string) {
+	t.Helper()
+
+	err := s.store.Repositories().SetState(context.Background(), id, "Deprecated")
+	require.NoError(t, err)
+}
+
+func (s *TestDataSeeder) SetRepositoryDisabled(t *testing.T, id string) {
+	t.Helper()
+
+	err := s.store.Repositories().SetState(context.Background(), id, "Disabled")
+	require.NoError(t, err)
 }

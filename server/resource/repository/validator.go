@@ -99,10 +99,6 @@ func validateCreateRepositoryRequest(req *mgmt.CreateRepositoryRequest) (vaild b
 		return false, "Invalid Namespace"
 	}
 
-	if req.CreatedBy == "" {
-		return false, "Invalid created user"
-	}
-
 	return true, ""
 }
 

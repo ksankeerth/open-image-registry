@@ -223,10 +223,15 @@ func (h *RepositoryHandler) updateRepository(w http.ResponseWriter, r *http.Requ
 func (h *RepositoryHandler) deleteRepository(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	err := h.svc.deleteRepository(r.Context(), id, "")
+	notFound, err := h.svc.deleteRepository(r.Context(), id, "")
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
 		httperrors.InternalError(w, 500, "Request aborted due to errors")
+		return
+	}
+
+	if notFound {
+		httperrors.NotFound(w, 404, "")
 		return
 	}
 
@@ -261,6 +266,8 @@ func (h *RepositoryHandler) changeState(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	httperrors.SendError(w, result.httpStatusCode, result.httpErrorMsg)
+
 	if result.httpStatusCode == http.StatusNotFound {
 		httperrors.NotFound(w, 404, result.httpErrorMsg)
 		return
@@ -290,13 +297,7 @@ func (h *RepositoryHandler) changeVisiblity(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if result.httpStatusCode == http.StatusNotFound {
-		httperrors.NotFound(w, 404, result.httpErrorMsg)
-		return
-	}
-
-	httperrors.NotAllowed(w, 403, result.httpErrorMsg)
-
+	httperrors.SendError(w, result.httpStatusCode, result.httpErrorMsg)
 }
 
 func (h *RepositoryHandler) listUserAccess(w http.ResponseWriter, r *http.Request) {
@@ -358,32 +359,34 @@ func (h *RepositoryHandler) grantUserAccess(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Validate URL and body ID match
+	if id != request.ResourceID {
+		log.Logger().Warn().Msg("'identifier' in URL and body don't match")
+		httperrors.BadRequest(w, 400, "'identifier' in URL and body don't match")
+		return
+	}
+
 	valid, errMsg := validateRepositoryGrantAccessRequest(&request)
 	if !valid {
 		httperrors.BadRequest(w, 400, errMsg)
 		return
 	}
 
-	result, err := h.svc.grantAccess(r.Context(), id, &request)
+	granter := r.Context().Value(constants.ContextUsername).(string)
+	if granter != request.GrantedBy {
+		httperrors.NotAllowed(w, 403, "Grantor must be same as authenticated user!")
+		return
+	}
+
+	result, err := h.svc.grantAccess(r.Context(), &request)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("Request aborted due to errors")
 		httperrors.InternalError(w, 500, "Request aborted due to errors")
 		return
 	}
 
-	if result.bodyURLMismatch {
-		log.Logger().Warn().Msg("'identifier' in URL and body don't match")
-		httperrors.BadRequest(w, 400, "'identifier' in URL and body don't match")
-		return
-	}
-
-	if result.conflict {
-		httperrors.AlreadyExist(w, 403, "Not allowed to override existing access level for same resource and user")
-		return
-	}
-
-	if result.grantedUserNotFound || result.resourceNotFound || result.userNotFound {
-		httperrors.NotFound(w, 404, "")
+	if result.statusCode != http.StatusOK {
+		http.Error(w, result.errMsg, result.statusCode)
 		return
 	}
 
@@ -392,30 +395,25 @@ func (h *RepositoryHandler) grantUserAccess(w http.ResponseWriter, r *http.Reque
 
 func (h *RepositoryHandler) revokeUserAccess(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	userID := chi.URLParam(r, "userID")
 
-	var request mgmt.AccessRevokeRequest
-
-	err := json.NewDecoder(r.Body).Decode(&request)
-	if err != nil {
-		log.Logger().Error().Err(err).Msgf("Parsing request failed : %s", r.RequestURI)
-		httperrors.BadRequest(w, 400, "Bad request")
-		return
+	request := mgmt.AccessRevokeRequest{
+		ResourceType: constants.ResourceTypeRepository,
+		ResourceID:   id,
+		UserID:       userID,
 	}
 
-	notFound, mismatch, err := h.svc.revokeAccess(r.Context(), id, &request)
+	statusCode, msg, err := h.svc.revokeAccess(r.Context(), &request)
 	if err != nil {
 		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
 		httperrors.InternalError(w, 500, "Request aborted due to errors")
 		return
 	}
-	if notFound {
-		httperrors.NotFound(w, 404, "")
-		return
-	}
-	if mismatch {
-		httperrors.BadRequest(w, 400, "'identifier' in URL doesn't match with request")
+
+	if statusCode == http.StatusOK {
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	httperrors.SendError(w, statusCode, msg)
 }
