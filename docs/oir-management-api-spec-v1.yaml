@@ -1631,6 +1631,48 @@ paths:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
         '500': { $ref: '#/components/responses/InternalError' }
 
+  /resource/repositories/check-name:
+      get:
+        tags: [Repositories]
+        summary: Check repository name availability
+        description: |
+          Verifies if a specific repository name is available. 
+          Validation follows the regex: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+        parameters:
+          - name: name
+            in: query
+            required: true
+            description: The repository name to validate
+            schema:
+              type: string
+              pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+          - name: namespace_id
+            in: query
+            required: true
+            description: The namespace_id to check name validity of repository
+            schema:
+              type: string
+        responses:
+          '200':
+            description: Check performed successfully
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    available:
+                      type: boolean
+                      description: True if the name is not taken and is valid.
+          '400':
+            description: Name does not match the required regex pattern
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/ErrorResponse'
+          '500':
+            $ref: '#/components/responses/InternalError'
+
+
 components:
   securitySchemes:
     cookieAuth:
@@ -2287,10 +2329,6 @@ components:
           type: boolean
           default: false
           description: Whether the repository is publicly accessible
-        created_by:
-          type: string
-          description: User ID of the creator
-          example: user-456
 
     CreateRepositoryResponse:
       type: object
