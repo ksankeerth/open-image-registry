@@ -43,3 +43,7 @@ type RepositoryResponse struct {
 type UpdateRepositoryRequest struct {
 	Description string `json:"description"`
 }
+
+type RepositoryNameCheckResponse struct {
+	Available bool `json:"available"`
+}
