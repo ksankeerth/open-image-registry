@@ -251,3 +251,7 @@ input {
 *::-webkit-scrollbar-thumb:hover {
   background: var(--surface-400);
 }
+
+.shadow-micro {
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.06), 0 0 1px rgba(0, 0, 0, 0.04) !important;
+}

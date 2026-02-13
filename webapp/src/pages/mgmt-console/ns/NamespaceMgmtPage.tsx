@@ -5,14 +5,13 @@ import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
 
 import { Chip } from 'primereact/chip';
-import { OverlayPanel } from 'primereact/overlaypanel';
 import { Tooltip } from 'primereact/tooltip';
 import { useNavigate } from 'react-router-dom';
 import ChipsFilter from '../../../components/ChipsFilter';
 import CreateNamespaceDialog from '../../../components/CreateNamespace';
 import SearchButton from '../../../components/SearchButton';
 import { NAMESPACE_FILTER_OPTIONS } from '../../../config/table_filter';
-import { NamespaceInfo, TableFilterSearchPaginationSortState } from '../../../types/app_types';
+import { TableFilterSearchPaginationSortState } from '../../../types/app_types';
 import { getResourceNamespaces, GetResourceNamespacesData, NamespaceViewDto } from '../../../api';
 import { useLoader } from '../../../components/loader';
 import { useToast } from '../../../components/ToastComponent';
@@ -23,9 +22,9 @@ const NameColumnTemplate = (ns: NamespaceViewDto) => {
   return (
     <React.Fragment>
       <div className={`flex flex-row align-items-center gap-2 cursor-pointer ${toolTipTarget}`}>
-        {ns.state == 'active' && <div className="status-circle status-active" />}
-        {ns.state == 'disabled' && <div className="status-circle status-disabled" />}
-        {ns.state == 'deprecated' && <div className="status-circle status-deprecated" />}
+        {ns.state == 'Active' && <div className="status-circle status-active" />}
+        {ns.state == 'Disabled' && <div className="status-circle status-disabled" />}
+        {ns.state == 'Deprecated' && <div className="status-circle status-deprecated" />}
         <div className="font-inter font-semibold">{ns.name}</div>
         {ns.is_public && (
           <Chip
@@ -154,7 +153,7 @@ const NamespaceMgmtPage = () => {
             <div className="pr-2 flex flex-row pt-1 pb-1 justify-content-end gap-4  h-100">
               <SearchButton placeholder="Search namespaces ...." handleSearch={handleSearch} />
               <Button
-                className="border-1 pl-3 pr-3  border-solid border-round-3xl border-teal-100 text-xs shadow-1"
+                className="border-1 pl-3 pr-3  border-solid border-round-3xl border-teal-100 text-xs shadow-micro"
                 onClick={() => setShowCreateNamespaceDialog((c) => !c)}
               >
                 <span className="pi pi-plus text-sm "></span>
@@ -163,7 +162,7 @@ const NamespaceMgmtPage = () => {
               </Button>
             </div>
           </div>
-          <div className="flex flex-row align-items-center pl-3 pr-2  mt-2 shadow-1 bg-white border-round-xl ">
+          <div className="flex flex-row align-items-center pl-3 pr-2  mt-2 shadow-micro border-1 border-100 bg-white border-round-xl">
             <div className=" text-sm"> Select Filter</div>
             <ChipsFilter
               filterOptions={NAMESPACE_FILTER_OPTIONS}
@@ -176,34 +175,32 @@ const NamespaceMgmtPage = () => {
           paginator
           rows={8}
           totalRecords={totalEntries}
+          border-1
+          border-100
+          bg-white
+          border-round-xl
           pt={{
             wrapper: {
-              className: 'bg-white shadow-1 border-round-top-2xl',
-            },
-            root: {
-              className: 'bg-white shadow-1 border-round-2xl',
-            },
-            footer: {
-              className: 'bg-white shadow-1 border-round-2xl',
+              className: 'border-round-top-xl border-none',
             },
             paginator: {
               root: {
-                className: 'bg-white border-round-bottom-2xl pb-0 mb-0',
+                className: 'border-none border-round-bottom-xl pb-0 mb-0',
               },
             },
           }}
-          className="bg-white shadow-1 border-round-sm"
+          className="bg-white shadow-micro border-1 border-100 border-round-xl pt-0"
           paginatorLeft={<div className="text-xs">{totalEntries} namespaces found</div>}
         // onPage={handlePagination}
         >
           <Column header="Name" body={NameColumnTemplate} sortable />
-          <Column header="Type" field="type" />
+          <Column header="Purpose" field="purpose" />
           <Column
             header="Maintainers"
-            body={(ns: NamespaceInfo) => {
+            body={(ns: NamespaceViewDto) => {
               return (
                 <div className="flex flex-row align-items-end gap-1">
-                  <span>john, supun,</span>
+                  <span>{ns.maintainers && ns.maintainers.join(', ')}</span>
                   <span className="pi pi-ellipsis-h cursor-pointer text-blue-600 text-xs"></span>
                   <span className="pi pi-external-link cursor-pointer text-blue-600 text-xs"></span>
                 </div>
@@ -213,10 +210,10 @@ const NamespaceMgmtPage = () => {
 
           <Column
             header="Developers"
-            body={(ns: NamespaceInfo) => {
+            body={(ns: NamespaceViewDto) => {
               return (
                 <div className="flex flex-row align-items-end gap-1">
-                  <span>john, supun,</span>
+                  <span>{ns.developers && ns.developers?.join(', ')}</span>
                   <span className="pi pi-ellipsis-h cursor-pointer text-blue-600 text-xs"></span>
                   <span className="pi pi-external-link cursor-pointer text-blue-600 text-xs"></span>
                 </div>

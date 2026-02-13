@@ -7,8 +7,10 @@ import NewAccountSetupPage from './pages/NewAccountSetupPage';
 import ManagmentConsole from './pages/mgmt-console';
 import RegistryConsole from './pages/reg-console';
 import NamespaceMgmtPage from './pages/mgmt-console/ns/NamespaceMgmtPage';
-import NamespaceViewPage from './pages/mgmt-console/NamespaceViewPage';
+import NamespaceViewPage from './pages/mgmt-console/ns/NamespaceViewPage';
 import UserAdministrationPage from './pages/mgmt-console/user/UserAdministrationPage';
+import RepositoryViewPage from './pages/mgmt-console/repo/RepositoryViewPage';
+import RepositoryMgmtPage from './pages/mgmt-console/repo/RepositoryMgmtPage';
 
 const AppRouter = createBrowserRouter([
   {
@@ -42,12 +44,18 @@ const AppRouter = createBrowserRouter([
               {
                 path: '/console/management/namespaces',
                 element: <NamespaceMgmtPage />,
-                children: [
-                  {
-                    path: '/console/management/namespaces/:id',
-                    element: <NamespaceViewPage />,
-                  },
-                ],
+              },
+              {
+                path: '/console/management/namespaces/:id',
+                element: <NamespaceViewPage />,
+              },
+              {
+                path: '/console/management/repositories',
+                element: <RepositoryMgmtPage />,
+              },
+              {
+                path: '/console/management/repositories/:id',
+                element: <RepositoryViewPage />,
               },
             ],
           },

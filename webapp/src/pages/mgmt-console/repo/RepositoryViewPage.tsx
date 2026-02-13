@@ -2,8 +2,12 @@ import { Chip } from 'primereact/chip';
 import { Divider } from 'primereact/divider';
 import { TabPanel, TabView } from 'primereact/tabview';
 import React, { useState } from 'react';
-import { RepositoryTagInfo, RepositoryUserAccessInfo, UserAccessInfo } from '../../types/app_types';
-import ChipsFilter from '../../components/ChipsFilter';
+import {
+  RepositoryTagInfo,
+  RepositoryUserAccessInfo,
+  UserAccessInfo,
+} from '../../../types/app_types';
+import ChipsFilter from '../../../components/ChipsFilter';
 import { Button } from 'primereact/button';
 import { Column } from 'primereact/column';
 import { DataTable } from 'primereact/datatable';
@@ -11,7 +15,7 @@ import { InputText } from 'primereact/inputtext';
 import {
   REPOSITORY_TAG_FILTER_OPTIONS,
   REPOSITORY_USER_ACCESS_FILTER_OPTIONS,
-} from '../../config/table_filter';
+} from '../../../config/table_filter';
 
 const mockRepositoryUserAccess: RepositoryUserAccessInfo[] = [
   {

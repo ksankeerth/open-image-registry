@@ -328,7 +328,7 @@ const UserAdministrationPage = () => {
   };
 
   return (
-    <div className="flex flex-column flex-grow-1 gap-3 ">
+    <div className="flex flex-column flex-grow-1 gap-3">
       <div className="flex flex-column gap-2">
         <div className="flex flex-column my-2 gap-2">
           <div className="flex flex-row align-items-stretch justify-content-between max-h-4rem h-3rem">
