@@ -21,6 +21,7 @@ const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement)
 
 client.setConfig({
   baseUrl: window.APP_CONFIG?.API_BASE_URL || 'http://localhost:8000/api/v1',
+  parseAs: 'json',
 });
 
 client.interceptors.response.use(async (response) => {
