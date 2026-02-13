@@ -3,6 +3,7 @@ import React from 'react';
 
 type SearchButtonProps = {
   placeholder: string;
+  class?: string;
   handleSearch: (searchTerm: string) => void;
 };
 
@@ -16,7 +17,7 @@ const SearchButton = (props: SearchButtonProps) => {
         bg-white border-round-3xl
         px-3 py-2 w-20rem
         transition-all transition-duration-200
-        ${isFocused ? 'shadow-3' : 'shadow-1'}
+        ${props.class ? props.class : isFocused ? 'shadow-3' : 'shadow-1'}
       `}
       style={{
         boxShadow: isFocused
