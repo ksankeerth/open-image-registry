@@ -3,7 +3,7 @@ import { Button } from 'primereact/button';
 import { Divider } from 'primereact/divider';
 import React from 'react';
 
-const RepositoryAccessPage = () => {
+const RepositoryMgmtPage = () => {
   return (
     <div className="h-full  flex flex-column gap-2 p-2 pt-4">
       <div className="flex-grow-1 border-round-lg bg-white flex flex-column pt-2 gap-2 ">
@@ -225,4 +225,4 @@ const RepositoryAccessPage = () => {
   );
 };
 
-export default RepositoryAccessPage;
+export default RepositoryMgmtPage;

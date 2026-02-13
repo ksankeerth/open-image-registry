@@ -61,7 +61,7 @@ const CreateNamespaceDialog = (props: CreateNamespaceDialogProps) => {
   };
 
   const validateNamespaceAvailability = async (name: string, successFn: () => void) => {
-    showLoading('Checking name availability ...');
+    showLoading('Checking name availability...');
     const { data, error } = await getResourceNamespacesCheckName({
       query: {
         name: name,
