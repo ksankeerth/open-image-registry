@@ -209,7 +209,7 @@ func (r *repositoryStore) List(ctx context.Context, conditions *store.ListQueryC
 		WithAllowedSortFields("NAME", "TAGS", "CREATED_AT").
 		WithAllowedFilterFields("STATE", "IS_PUBLIC", "TAGS", "NAMESPACE_ID")
 
-	listQuery, countQuery, args, err := qb.Build(RepositoryListBaseQuery, RepositoryGetIDQuery, conditions)
+	listQuery, countQuery, args, err := qb.Build(RepositoryListBaseQuery, RepositoryCountBaseQuery, conditions)
 	if err != nil {
 		log.Logger().Error().Err(err).Msg("Failed to build repository list query")
 		return nil, 0, fmt.Errorf("build query: %w", err)

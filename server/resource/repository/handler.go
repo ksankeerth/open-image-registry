@@ -13,6 +13,7 @@ import (
 	"github.com/ksankeerth/open-image-registry/resource/access"
 	"github.com/ksankeerth/open-image-registry/store"
 	"github.com/ksankeerth/open-image-registry/types/api/v1alpha/mgmt"
+	"github.com/ksankeerth/open-image-registry/utils"
 )
 
 type RepositoryHandler struct {
@@ -34,6 +35,7 @@ func (h *RepositoryHandler) Routes() chi.Router {
 
 	r.Post("/", h.createRepository)
 	r.Get("/", h.listRepositories)
+	r.Get("/check-name", h.checkNameAvailability)
 
 	r.Route("/{id}", func(r chi.Router) {
 		r.Head("/", h.repositoryExists)
@@ -416,4 +418,36 @@ func (h *RepositoryHandler) revokeUserAccess(w http.ResponseWriter, r *http.Requ
 	}
 
 	httperrors.SendError(w, statusCode, msg)
+}
+
+func (h *RepositoryHandler) checkNameAvailability(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	nsId := r.URL.Query().Get("namespace_id")
+
+	if nsId == "" {
+		httperrors.BadRequest(w, 400, "Missing query param `namespace_id`")
+		return
+	}
+
+	if !utils.IsValidRepository(name) {
+		httperrors.BadRequest(w, 400, "Invalid name format")
+		return
+	}
+
+	available, err := h.svc.checkNameAvailability(r.Context(), nsId, name)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Request aborted due to errors: %s", r.RequestURI)
+		httperrors.InternalError(w, 500, "Request aborted due to errors")
+		return
+	}
+
+	res := mgmt.RepositoryNameCheckResponse{
+		Available: available,
+	}
+
+	w.WriteHeader(http.StatusOK)
+	err = json.NewEncoder(w).Encode(res)
+	if err != nil {
+		log.Logger().Error().Err(err).Msgf("Marshalling response failed due to errors: %s", r.RequestURI)
+	}
 }

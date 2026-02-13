@@ -586,3 +586,14 @@ func (svc *repositoryService) listUsers(reqCtx context.Context, id string, cond 
 
 	return accesses, total, err
 }
+
+func (svc *repositoryService) checkNameAvailability(reqCtx context.Context, nsId, name string) (available bool, err error) {
+
+	exists, err := svc.store.Repositories().ExistsByIdentifier(reqCtx, nsId, name)
+	if err != nil {
+		log.Logger().Error().Err(err).Msg("Failed to check repository name availability due to database errors")
+		return false, err
+	}
+
+	return !exists, nil
+}
