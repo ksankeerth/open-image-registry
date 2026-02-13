@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { DeleteResourceNamespacesByIdData, DeleteResourceNamespacesByIdResponses, DeleteResourceNamespacesByIdUsersByUserIdData, DeleteResourceNamespacesByIdUsersByUserIdErrors, DeleteResourceNamespacesByIdUsersByUserIdResponses, DeleteUsersByIdData, DeleteUsersByIdErrors, DeleteUsersByIdResponses, GetOnboardingByUuidData, GetOnboardingByUuidErrors, GetOnboardingByUuidResponses, GetResourceNamespacesByIdData, GetResourceNamespacesByIdErrors, GetResourceNamespacesByIdResponses, GetResourceNamespacesByIdUsersData, GetResourceNamespacesByIdUsersErrors, GetResourceNamespacesByIdUsersResponses, GetResourceNamespacesCheckNameData, GetResourceNamespacesCheckNameErrors, GetResourceNamespacesCheckNameResponses, GetResourceNamespacesData, GetResourceNamespacesErrors, GetResourceNamespacesResponses, GetUsersByIdData, GetUsersByIdErrors, GetUsersByIdResponses, GetUsersData, GetUsersErrors, GetUsersMeData, GetUsersMeErrors, GetUsersMeResponses, GetUsersResponses, HeadResourceNamespacesByIdData, HeadResourceNamespacesByIdErrors, HeadResourceNamespacesByIdResponses, PatchResourceNamespacesByIdStateData, PatchResourceNamespacesByIdStateErrors, PatchResourceNamespacesByIdStateResponses, PatchResourceNamespacesByIdVisibilityData, PatchResourceNamespacesByIdVisibilityErrors, PatchResourceNamespacesByIdVisibilityResponses, PostAuthLoginData, PostAuthLoginErrors, PostAuthLoginResponses, PostAuthLogoutData, PostAuthLogoutErrors, PostAuthLogoutResponses, PostOnboardingByUuidCompleteData, PostOnboardingByUuidCompleteErrors, PostOnboardingByUuidCompleteResponses, PostResourceNamespacesByIdUsersData, PostResourceNamespacesByIdUsersErrors, PostResourceNamespacesByIdUsersResponses, PostResourceNamespacesData, PostResourceNamespacesErrors, PostResourceNamespacesResponses, PostUsersData, PostUsersErrors, PostUsersResponses, PostUsersValidateData, PostUsersValidateErrors, PostUsersValidateResponses, PutResourceNamespacesByIdData, PutResourceNamespacesByIdResponses, PutUsersByIdData, PutUsersByIdEmailData, PutUsersByIdEmailErrors, PutUsersByIdEmailResponses, PutUsersByIdErrors, PutUsersByIdLockData, PutUsersByIdLockErrors, PutUsersByIdLockResponses, PutUsersByIdPasswordData, PutUsersByIdPasswordErrors, PutUsersByIdPasswordResponses, PutUsersByIdResponses, PutUsersByIdRoleData, PutUsersByIdRoleErrors, PutUsersByIdRoleResponses, PutUsersByIdUnlockData, PutUsersByIdUnlockErrors, PutUsersByIdUnlockResponses, PutUsersMeData, PutUsersMeErrors, PutUsersMeResponses } from './types.gen';
+import type { DeleteResourceNamespacesByIdData, DeleteResourceNamespacesByIdResponses, DeleteResourceNamespacesByIdUsersByUserIdData, DeleteResourceNamespacesByIdUsersByUserIdErrors, DeleteResourceNamespacesByIdUsersByUserIdResponses, DeleteResourceRepositoriesByIdData, DeleteResourceRepositoriesByIdErrors, DeleteResourceRepositoriesByIdResponses, DeleteResourceRepositoriesByIdUsersByUserIdData, DeleteResourceRepositoriesByIdUsersByUserIdErrors, DeleteResourceRepositoriesByIdUsersByUserIdResponses, DeleteUsersByIdData, DeleteUsersByIdErrors, DeleteUsersByIdResponses, GetNamespaceUsersData, GetNamespaceUsersErrors, GetNamespaceUsersResponses, GetOnboardingByUuidData, GetOnboardingByUuidErrors, GetOnboardingByUuidResponses, GetRepositoryUsersData, GetRepositoryUsersErrors, GetRepositoryUsersResponses, GetResourceNamespacesByIdData, GetResourceNamespacesByIdErrors, GetResourceNamespacesByIdResponses, GetResourceNamespacesCheckNameData, GetResourceNamespacesCheckNameErrors, GetResourceNamespacesCheckNameResponses, GetResourceNamespacesData, GetResourceNamespacesErrors, GetResourceNamespacesResponses, GetResourceRepositoriesByIdData, GetResourceRepositoriesByIdErrors, GetResourceRepositoriesByIdResponses, GetResourceRepositoriesCheckNameData, GetResourceRepositoriesCheckNameErrors, GetResourceRepositoriesCheckNameResponses, GetResourceRepositoriesData, GetResourceRepositoriesErrors, GetResourceRepositoriesResponses, GetUsersByIdData, GetUsersByIdErrors, GetUsersByIdResponses, GetUsersData, GetUsersErrors, GetUsersMeData, GetUsersMeErrors, GetUsersMeResponses, GetUsersResponses, HeadResourceNamespacesByIdData, HeadResourceNamespacesByIdErrors, HeadResourceNamespacesByIdResponses, HeadResourceRepositoriesByIdData, HeadResourceRepositoriesByIdErrors, HeadResourceRepositoriesByIdResponses, PatchResourceNamespacesByIdStateData, PatchResourceNamespacesByIdStateErrors, PatchResourceNamespacesByIdStateResponses, PatchResourceNamespacesByIdVisibilityData, PatchResourceNamespacesByIdVisibilityErrors, PatchResourceNamespacesByIdVisibilityResponses, PatchResourceRepositoriesByIdStateData, PatchResourceRepositoriesByIdStateErrors, PatchResourceRepositoriesByIdStateResponses, PatchResourceRepositoriesByIdVisibilityData, PatchResourceRepositoriesByIdVisibilityErrors, PatchResourceRepositoriesByIdVisibilityResponses, PostAuthLoginData, PostAuthLoginErrors, PostAuthLoginResponses, PostAuthLogoutData, PostAuthLogoutErrors, PostAuthLogoutResponses, PostOnboardingByUuidCompleteData, PostOnboardingByUuidCompleteErrors, PostOnboardingByUuidCompleteResponses, PostResourceNamespacesByIdUsersData, PostResourceNamespacesByIdUsersErrors, PostResourceNamespacesByIdUsersResponses, PostResourceNamespacesData, PostResourceNamespacesErrors, PostResourceNamespacesResponses, PostResourceRepositoriesByIdUsersData, PostResourceRepositoriesByIdUsersErrors, PostResourceRepositoriesByIdUsersResponses, PostResourceRepositoriesData, PostResourceRepositoriesErrors, PostResourceRepositoriesResponses, PostUsersData, PostUsersErrors, PostUsersResponses, PostUsersValidateData, PostUsersValidateErrors, PostUsersValidateResponses, PutResourceNamespacesByIdData, PutResourceNamespacesByIdResponses, PutResourceRepositoriesByIdData, PutResourceRepositoriesByIdErrors, PutResourceRepositoriesByIdResponses, PutUsersByIdData, PutUsersByIdEmailData, PutUsersByIdEmailErrors, PutUsersByIdEmailResponses, PutUsersByIdErrors, PutUsersByIdLockData, PutUsersByIdLockErrors, PutUsersByIdLockResponses, PutUsersByIdPasswordData, PutUsersByIdPasswordErrors, PutUsersByIdPasswordResponses, PutUsersByIdResponses, PutUsersByIdRoleData, PutUsersByIdRoleErrors, PutUsersByIdRoleResponses, PutUsersByIdUnlockData, PutUsersByIdUnlockErrors, PutUsersByIdUnlockResponses, PutUsersMeData, PutUsersMeErrors, PutUsersMeResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean> = Options2<TData, ThrowOnError> & {
     /**
@@ -456,7 +456,7 @@ export const patchResourceNamespacesByIdState = <ThrowOnError extends boolean = 
  *
  * Retrieve a paginated list of users who have access to the namespace.
  */
-export const getResourceNamespacesByIdUsers = <ThrowOnError extends boolean = false>(options: Options<GetResourceNamespacesByIdUsersData, ThrowOnError>) => (options.client ?? client).get<GetResourceNamespacesByIdUsersResponses, GetResourceNamespacesByIdUsersErrors, ThrowOnError>({
+export const getNamespaceUsers = <ThrowOnError extends boolean = false>(options: Options<GetNamespaceUsersData, ThrowOnError>) => (options.client ?? client).get<GetNamespaceUsersResponses, GetNamespaceUsersErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
             name: 'auth_token',
@@ -521,3 +521,226 @@ export const deleteResourceNamespacesByIdUsersByUserId = <ThrowOnError extends b
  *
  */
 export const getResourceNamespacesCheckName = <ThrowOnError extends boolean = false>(options: Options<GetResourceNamespacesCheckNameData, ThrowOnError>) => (options.client ?? client).get<GetResourceNamespacesCheckNameResponses, GetResourceNamespacesCheckNameErrors, ThrowOnError>({ url: '/resource/namespaces/check-name', ...options });
+
+/**
+ * List and filter repositories
+ *
+ * Retrieve a paginated list of container repositories with optional filtering, sorting, and searching.
+ *
+ */
+export const getResourceRepositories = <ThrowOnError extends boolean = false>(options?: Options<GetResourceRepositoriesData, ThrowOnError>) => (options?.client ?? client).get<GetResourceRepositoriesResponses, GetResourceRepositoriesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'auth_token',
+            type: 'apiKey'
+        }],
+    url: '/resource/repositories',
+    ...options
+});
+
+/**
+ * Create a new repository
+ *
+ * Create a new container repository within a namespace.
+ *
+ * **Requirements:**
+ * - Namespace must exist and be in Active state
+ * - Creator user must exist
+ * - Repository name must be unique within the namespace
+ * - Repository name must match pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+ *
+ * **Visibility rules:**
+ * - Public repositories can only be created under public namespaces
+ * - Private repositories can be created under any namespace
+ *
+ * **State rules:**
+ * - Cannot create repositories under Deprecated namespaces
+ * - Cannot create repositories under Disabled namespaces
+ *
+ */
+export const postResourceRepositories = <ThrowOnError extends boolean = false>(options: Options<PostResourceRepositoriesData, ThrowOnError>) => (options.client ?? client).post<PostResourceRepositoriesResponses, PostResourceRepositoriesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'auth_token',
+            type: 'apiKey'
+        }],
+    url: '/resource/repositories',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete repository
+ */
+export const deleteResourceRepositoriesById = <ThrowOnError extends boolean = false>(options: Options<DeleteResourceRepositoriesByIdData, ThrowOnError>) => (options.client ?? client).delete<DeleteResourceRepositoriesByIdResponses, DeleteResourceRepositoriesByIdErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'auth_token',
+            type: 'apiKey'
+        }],
+    url: '/resource/repositories/{id}',
+    ...options
+});
+
+/**
+ * Get repository details
+ */
+export const getResourceRepositoriesById = <ThrowOnError extends boolean = false>(options: Options<GetResourceRepositoriesByIdData, ThrowOnError>) => (options.client ?? client).get<GetResourceRepositoriesByIdResponses, GetResourceRepositoriesByIdErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'auth_token',
+            type: 'apiKey'
+        }],
+    url: '/resource/repositories/{id}',
+    ...options
+});
+
+/**
+ * Check if repository exists
+ */
+export const headResourceRepositoriesById = <ThrowOnError extends boolean = false>(options: Options<HeadResourceRepositoriesByIdData, ThrowOnError>) => (options.client ?? client).head<HeadResourceRepositoriesByIdResponses, HeadResourceRepositoriesByIdErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'auth_token',
+            type: 'apiKey'
+        }],
+    url: '/resource/repositories/{id}',
+    ...options
+});
+
+/**
+ * Update repository
+ *
+ * Update repository description
+ */
+export const putResourceRepositoriesById = <ThrowOnError extends boolean = false>(options: Options<PutResourceRepositoriesByIdData, ThrowOnError>) => (options.client ?? client).put<PutResourceRepositoriesByIdResponses, PutResourceRepositoriesByIdErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'auth_token',
+            type: 'apiKey'
+        }],
+    url: '/resource/repositories/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Change repository visibility
+ *
+ * Change whether a repository is public or private.
+ *
+ * **Rules:**
+ * - Cannot make repository public if parent namespace is private
+ * - Cannot change visibility if repository or namespace is disabled
+ * - No-op if visibility is already set to the requested value
+ *
+ */
+export const patchResourceRepositoriesByIdVisibility = <ThrowOnError extends boolean = false>(options: Options<PatchResourceRepositoriesByIdVisibilityData, ThrowOnError>) => (options.client ?? client).patch<PatchResourceRepositoriesByIdVisibilityResponses, PatchResourceRepositoriesByIdVisibilityErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'auth_token',
+            type: 'apiKey'
+        }],
+    url: '/resource/repositories/{id}/visibility',
+    ...options
+});
+
+/**
+ * Change repository state
+ *
+ * Change the lifecycle state of a repository.
+ *
+ * **Transition rules:**
+ * - Cannot transition from Active to Disabled directly
+ * - Cannot change state if namespace is disabled
+ * - Cannot change to Active if namespace is deprecated
+ * - No-op if state is already set to the requested value
+ *
+ */
+export const patchResourceRepositoriesByIdState = <ThrowOnError extends boolean = false>(options: Options<PatchResourceRepositoriesByIdStateData, ThrowOnError>) => (options.client ?? client).patch<PatchResourceRepositoriesByIdStateResponses, PatchResourceRepositoriesByIdStateErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'auth_token',
+            type: 'apiKey'
+        }],
+    url: '/resource/repositories/{id}/state',
+    ...options
+});
+
+/**
+ * List users with access to repository
+ *
+ * Retrieve a paginated list of users who have access to the repository.
+ * This includes both direct repository access and inherited namespace access.
+ *
+ */
+export const getRepositoryUsers = <ThrowOnError extends boolean = false>(options: Options<GetRepositoryUsersData, ThrowOnError>) => (options.client ?? client).get<GetRepositoryUsersResponses, GetRepositoryUsersErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'auth_token',
+            type: 'apiKey'
+        }],
+    url: '/resource/repositories/{id}/users',
+    ...options
+});
+
+/**
+ * Grant user access to repository
+ *
+ * Grants a user access to a repository.
+ *
+ * **Rules enforced:**
+ * - resource_type must be `Repository`
+ * - resource_id in body must match path `{id}`
+ * - Only Guest and Developer access levels are allowed for repositories
+ * - Access level must comply with user role hierarchy
+ * - Existing access cannot be overwritten (returns 409)
+ * - Granter must be authenticated user
+ *
+ */
+export const postResourceRepositoriesByIdUsers = <ThrowOnError extends boolean = false>(options: Options<PostResourceRepositoriesByIdUsersData, ThrowOnError>) => (options.client ?? client).post<PostResourceRepositoriesByIdUsersResponses, PostResourceRepositoriesByIdUsersErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'auth_token',
+            type: 'apiKey'
+        }],
+    url: '/resource/repositories/{id}/users',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Revoke user access from repository
+ *
+ * Revokes a user's direct access from a repository.
+ *
+ * **Note:** This only revokes direct repository access. Users may still have access through namespace-level permissions.
+ *
+ */
+export const deleteResourceRepositoriesByIdUsersByUserId = <ThrowOnError extends boolean = false>(options: Options<DeleteResourceRepositoriesByIdUsersByUserIdData, ThrowOnError>) => (options.client ?? client).delete<DeleteResourceRepositoriesByIdUsersByUserIdResponses, DeleteResourceRepositoriesByIdUsersByUserIdErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'auth_token',
+            type: 'apiKey'
+        }],
+    url: '/resource/repositories/{id}/users/{userID}',
+    ...options
+});
+
+/**
+ * Check repository name availability
+ *
+ * Verifies if a specific repository name is available.
+ * Validation follows the regex: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+ *
+ */
+export const getResourceRepositoriesCheckName = <ThrowOnError extends boolean = false>(options: Options<GetResourceRepositoriesCheckNameData, ThrowOnError>) => (options.client ?? client).get<GetResourceRepositoriesCheckNameResponses, GetResourceRepositoriesCheckNameErrors, ThrowOnError>({ url: '/resource/repositories/check-name', ...options });

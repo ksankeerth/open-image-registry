@@ -409,6 +409,7 @@ export type NamespaceResponse = {
     state: 'Active' | 'Deprecated' | 'Disabled';
     created_at: string;
     updated_at?: string | null;
+    created_by: string;
 };
 
 export type AccessGrantRequest = {
@@ -423,6 +424,71 @@ export type UserProfileInfo = {
     user_id: string;
     username: string;
     role: string;
+};
+
+export type CreateRepositoryRequest = {
+    /**
+     * Repository name (lowercase alphanumeric with hyphens, no leading/trailing hyphens)
+     */
+    name: string;
+    /**
+     * Parent namespace ID
+     */
+    namespace_id: string;
+    /**
+     * Repository description
+     */
+    description?: string;
+    /**
+     * Whether the repository is publicly accessible
+     */
+    is_public?: boolean;
+};
+
+export type CreateRepositoryResponse = {
+    /**
+     * Created repository ID
+     */
+    id?: string;
+};
+
+export type UpdateRepositoryRequest = {
+    /**
+     * Updated repository description
+     */
+    description?: string;
+};
+
+export type RepositoryViewDto = {
+    id?: string;
+    name?: string;
+    namespace_id?: string;
+    namespace_name?: string;
+    description?: string;
+    is_public?: boolean;
+    state?: 'Active' | 'Deprecated' | 'Disabled';
+    /**
+     * Number of image tags in the repository
+     */
+    tag_count?: number;
+    created_at?: string;
+    updated_at?: string;
+};
+
+export type RepositoryResponse = {
+    id?: string;
+    name?: string;
+    namespace_id?: string;
+    namespace_name?: string;
+    description?: string;
+    is_public?: boolean;
+    state?: 'Active' | 'Deprecated' | 'Disabled';
+    created_at?: string;
+    updated_at?: string;
+    /**
+     * User ID of the creator
+     */
+    created_by?: string;
 };
 
 /**
@@ -1320,7 +1386,7 @@ export type PatchResourceNamespacesByIdStateResponses = {
     200: unknown;
 };
 
-export type GetResourceNamespacesByIdUsersData = {
+export type GetNamespaceUsersData = {
     body?: never;
     path: {
         /**
@@ -1357,7 +1423,7 @@ export type GetResourceNamespacesByIdUsersData = {
     url: '/resource/namespaces/{id}/users';
 };
 
-export type GetResourceNamespacesByIdUsersErrors = {
+export type GetNamespaceUsersErrors = {
     /**
      * Invalid filter or sort field
      */
@@ -1376,9 +1442,9 @@ export type GetResourceNamespacesByIdUsersErrors = {
     500: ErrorResponse;
 };
 
-export type GetResourceNamespacesByIdUsersError = GetResourceNamespacesByIdUsersErrors[keyof GetResourceNamespacesByIdUsersErrors];
+export type GetNamespaceUsersError = GetNamespaceUsersErrors[keyof GetNamespaceUsersErrors];
 
-export type GetResourceNamespacesByIdUsersResponses = {
+export type GetNamespaceUsersResponses = {
     /**
      * List of user accesses retrieved successfully
      */
@@ -1387,7 +1453,7 @@ export type GetResourceNamespacesByIdUsersResponses = {
     };
 };
 
-export type GetResourceNamespacesByIdUsersResponse = GetResourceNamespacesByIdUsersResponses[keyof GetResourceNamespacesByIdUsersResponses];
+export type GetNamespaceUsersResponse = GetNamespaceUsersResponses[keyof GetNamespaceUsersResponses];
 
 export type PostResourceNamespacesByIdUsersData = {
     body: AccessGrantRequest;
@@ -1519,3 +1585,548 @@ export type GetResourceNamespacesCheckNameResponses = {
 };
 
 export type GetResourceNamespacesCheckNameResponse = GetResourceNamespacesCheckNameResponses[keyof GetResourceNamespacesCheckNameResponses];
+
+export type GetResourceRepositoriesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Page number for pagination
+         */
+        page?: number;
+        /**
+         * Number of items per page
+         */
+        limit?: number;
+        order?: 'asc' | 'desc';
+        search?: string;
+        /**
+         * Sort field
+         */
+        sort_by?: 'name' | 'created_at' | 'updated_at';
+        state?: 'Active' | 'Deprecated' | 'Disabled';
+        is_public?: boolean;
+        /**
+         * Filter by namespace ID
+         */
+        namespace_id?: string;
+        /**
+         * Filter by tag count range. Supports comparison operators:
+         * - Single value: ">10" or "<100"
+         * - Range: Both ">10" and "<100" together
+         * Cannot use two ">" or two "<" operators together.
+         *
+         */
+        tags?: string;
+    };
+    url: '/resource/repositories';
+};
+
+export type GetResourceRepositoriesErrors = {
+    /**
+     * Invalid filter or sort field
+     */
+    400: ErrorResponse;
+    /**
+     * Invalid, expired, or revoked session cookie.
+     */
+    401: ErrorResponse;
+    /**
+     * Internal server error.
+     */
+    500: ErrorResponse;
+};
+
+export type GetResourceRepositoriesError = GetResourceRepositoriesErrors[keyof GetResourceRepositoriesErrors];
+
+export type GetResourceRepositoriesResponses = {
+    /**
+     * List of repositories retrieved successfully
+     */
+    200: PaginatedBase & {
+        entities?: Array<RepositoryViewDto>;
+    };
+};
+
+export type GetResourceRepositoriesResponse = GetResourceRepositoriesResponses[keyof GetResourceRepositoriesResponses];
+
+export type PostResourceRepositoriesData = {
+    body: CreateRepositoryRequest;
+    path?: never;
+    query?: never;
+    url: '/resource/repositories';
+};
+
+export type PostResourceRepositoriesErrors = {
+    /**
+     * Bad request - invalid JSON body or invalid repository name
+     */
+    400: ErrorResponse;
+    /**
+     * Invalid, expired, or revoked session cookie.
+     */
+    401: ErrorResponse;
+    /**
+     * Repository name already exists in the namespace
+     */
+    409: ErrorResponse;
+    /**
+     * Unprocessable entity - validation failures
+     */
+    422: ErrorResponse;
+    /**
+     * Internal server error.
+     */
+    500: ErrorResponse;
+};
+
+export type PostResourceRepositoriesError = PostResourceRepositoriesErrors[keyof PostResourceRepositoriesErrors];
+
+export type PostResourceRepositoriesResponses = {
+    /**
+     * Repository created successfully
+     */
+    201: CreateRepositoryResponse;
+};
+
+export type PostResourceRepositoriesResponse = PostResourceRepositoriesResponses[keyof PostResourceRepositoriesResponses];
+
+export type DeleteResourceRepositoriesByIdData = {
+    body?: never;
+    path: {
+        /**
+         * Repository ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/resource/repositories/{id}';
+};
+
+export type DeleteResourceRepositoriesByIdErrors = {
+    /**
+     * Invalid, expired, or revoked session cookie.
+     */
+    401: ErrorResponse;
+    /**
+     * Internal server error.
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteResourceRepositoriesByIdError = DeleteResourceRepositoriesByIdErrors[keyof DeleteResourceRepositoriesByIdErrors];
+
+export type DeleteResourceRepositoriesByIdResponses = {
+    /**
+     * Repository deleted successfully
+     */
+    200: unknown;
+};
+
+export type GetResourceRepositoriesByIdData = {
+    body?: never;
+    path: {
+        /**
+         * Repository ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/resource/repositories/{id}';
+};
+
+export type GetResourceRepositoriesByIdErrors = {
+    /**
+     * Invalid, expired, or revoked session cookie.
+     */
+    401: ErrorResponse;
+    /**
+     * Resource not found.
+     */
+    404: ErrorResponse;
+    /**
+     * Internal server error.
+     */
+    500: ErrorResponse;
+};
+
+export type GetResourceRepositoriesByIdError = GetResourceRepositoriesByIdErrors[keyof GetResourceRepositoriesByIdErrors];
+
+export type GetResourceRepositoriesByIdResponses = {
+    /**
+     * OK
+     */
+    200: RepositoryResponse;
+};
+
+export type GetResourceRepositoriesByIdResponse = GetResourceRepositoriesByIdResponses[keyof GetResourceRepositoriesByIdResponses];
+
+export type HeadResourceRepositoriesByIdData = {
+    body?: never;
+    path: {
+        /**
+         * Repository ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/resource/repositories/{id}';
+};
+
+export type HeadResourceRepositoriesByIdErrors = {
+    /**
+     * Invalid, expired, or revoked session cookie.
+     */
+    401: ErrorResponse;
+    /**
+     * Repository not found
+     */
+    404: unknown;
+    /**
+     * Internal server error.
+     */
+    500: ErrorResponse;
+};
+
+export type HeadResourceRepositoriesByIdError = HeadResourceRepositoriesByIdErrors[keyof HeadResourceRepositoriesByIdErrors];
+
+export type HeadResourceRepositoriesByIdResponses = {
+    /**
+     * Repository exists
+     */
+    200: unknown;
+};
+
+export type PutResourceRepositoriesByIdData = {
+    body: UpdateRepositoryRequest;
+    path: {
+        /**
+         * Repository ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/resource/repositories/{id}';
+};
+
+export type PutResourceRepositoriesByIdErrors = {
+    /**
+     * Malformed request or validation error.
+     */
+    400: ErrorResponse;
+    /**
+     * Invalid, expired, or revoked session cookie.
+     */
+    401: ErrorResponse;
+    /**
+     * Resource not found.
+     */
+    404: ErrorResponse;
+    /**
+     * Internal server error.
+     */
+    500: ErrorResponse;
+};
+
+export type PutResourceRepositoriesByIdError = PutResourceRepositoriesByIdErrors[keyof PutResourceRepositoriesByIdErrors];
+
+export type PutResourceRepositoriesByIdResponses = {
+    /**
+     * Repository updated successfully
+     */
+    200: unknown;
+};
+
+export type PatchResourceRepositoriesByIdVisibilityData = {
+    body?: never;
+    path: {
+        /**
+         * Repository ID
+         */
+        id: string;
+    };
+    query: {
+        /**
+         * Whether repository should be public
+         */
+        public: boolean;
+    };
+    url: '/resource/repositories/{id}/visibility';
+};
+
+export type PatchResourceRepositoriesByIdVisibilityErrors = {
+    /**
+     * Invalid query parameter
+     */
+    400: ErrorResponse;
+    /**
+     * Invalid, expired, or revoked session cookie.
+     */
+    401: ErrorResponse;
+    /**
+     * Visibility change not allowed
+     */
+    403: ErrorResponse;
+    /**
+     * Repository not found
+     */
+    404: ErrorResponse;
+    /**
+     * Internal server error.
+     */
+    500: ErrorResponse;
+};
+
+export type PatchResourceRepositoriesByIdVisibilityError = PatchResourceRepositoriesByIdVisibilityErrors[keyof PatchResourceRepositoriesByIdVisibilityErrors];
+
+export type PatchResourceRepositoriesByIdVisibilityResponses = {
+    /**
+     * Visibility changed successfully or no-op if already set
+     */
+    200: unknown;
+};
+
+export type PatchResourceRepositoriesByIdStateData = {
+    body?: never;
+    path: {
+        /**
+         * Repository ID
+         */
+        id: string;
+    };
+    query: {
+        /**
+         * New repository state
+         */
+        state: 'Active' | 'Deprecated' | 'Disabled';
+    };
+    url: '/resource/repositories/{id}/state';
+};
+
+export type PatchResourceRepositoriesByIdStateErrors = {
+    /**
+     * Invalid or missing state query parameter
+     */
+    400: ErrorResponse;
+    /**
+     * Invalid, expired, or revoked session cookie.
+     */
+    401: ErrorResponse;
+    /**
+     * State transition not allowed
+     */
+    403: ErrorResponse;
+    /**
+     * Repository not found
+     */
+    404: ErrorResponse;
+    /**
+     * Internal server error.
+     */
+    500: ErrorResponse;
+};
+
+export type PatchResourceRepositoriesByIdStateError = PatchResourceRepositoriesByIdStateErrors[keyof PatchResourceRepositoriesByIdStateErrors];
+
+export type PatchResourceRepositoriesByIdStateResponses = {
+    /**
+     * State changed successfully or no-op if same state
+     */
+    200: unknown;
+};
+
+export type GetRepositoryUsersData = {
+    body?: never;
+    path: {
+        /**
+         * Repository ID
+         */
+        id: string;
+    };
+    query?: {
+        /**
+         * Page number for pagination
+         */
+        page?: number;
+        /**
+         * Number of items per page
+         */
+        limit?: number;
+        /**
+         * The direction in which to sort the results.
+         */
+        order?: 'asc' | 'desc';
+        /**
+         * Search by username
+         */
+        search?: string;
+        /**
+         * Filter by access level (includes inherited Maintainer from namespace)
+         */
+        access_level?: 'Guest' | 'Developer' | 'Maintainer';
+        /**
+         * The field used to sort the results.
+         */
+        sort_by?: 'user' | 'granted_user' | 'granted_at';
+    };
+    url: '/resource/repositories/{id}/users';
+};
+
+export type GetRepositoryUsersErrors = {
+    /**
+     * Invalid filter or sort field
+     */
+    400: ErrorResponse;
+    /**
+     * Invalid, expired, or revoked session cookie.
+     */
+    401: ErrorResponse;
+    /**
+     * Internal server error.
+     */
+    500: ErrorResponse;
+};
+
+export type GetRepositoryUsersError = GetRepositoryUsersErrors[keyof GetRepositoryUsersErrors];
+
+export type GetRepositoryUsersResponses = {
+    /**
+     * List of user accesses retrieved successfully
+     */
+    200: PaginatedBase & {
+        entities?: Array<ResourceAccessViewDto>;
+    };
+};
+
+export type GetRepositoryUsersResponse = GetRepositoryUsersResponses[keyof GetRepositoryUsersResponses];
+
+export type PostResourceRepositoriesByIdUsersData = {
+    body: AccessGrantRequest;
+    path: {
+        /**
+         * Repository ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/resource/repositories/{id}/users';
+};
+
+export type PostResourceRepositoriesByIdUsersErrors = {
+    /**
+     * Invalid request body, resource_type not Repository, resource_id mismatch, or validation failure
+     */
+    400: ErrorResponse;
+    /**
+     * Invalid, expired, or revoked session cookie.
+     */
+    401: ErrorResponse;
+    /**
+     * Not allowed to override existing access or granter mismatch
+     */
+    403: ErrorResponse;
+    /**
+     * User, repository, or granter not found
+     */
+    404: ErrorResponse;
+    /**
+     * Internal server error.
+     */
+    500: ErrorResponse;
+};
+
+export type PostResourceRepositoriesByIdUsersError = PostResourceRepositoriesByIdUsersErrors[keyof PostResourceRepositoriesByIdUsersErrors];
+
+export type PostResourceRepositoriesByIdUsersResponses = {
+    /**
+     * Access granted successfully
+     */
+    200: unknown;
+};
+
+export type DeleteResourceRepositoriesByIdUsersByUserIdData = {
+    body?: never;
+    path: {
+        /**
+         * Repository ID
+         */
+        id: string;
+        /**
+         * User ID to revoke access from
+         */
+        userID: string;
+    };
+    query?: never;
+    url: '/resource/repositories/{id}/users/{userID}';
+};
+
+export type DeleteResourceRepositoriesByIdUsersByUserIdErrors = {
+    /**
+     * Invalid request or resource_type not Repository
+     */
+    400: ErrorResponse;
+    /**
+     * Invalid, expired, or revoked session cookie.
+     */
+    401: ErrorResponse;
+    /**
+     * Repository not found (user or access not found returns 200)
+     */
+    404: ErrorResponse;
+    /**
+     * Internal server error.
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteResourceRepositoriesByIdUsersByUserIdError = DeleteResourceRepositoriesByIdUsersByUserIdErrors[keyof DeleteResourceRepositoriesByIdUsersByUserIdErrors];
+
+export type DeleteResourceRepositoriesByIdUsersByUserIdResponses = {
+    /**
+     * Access revoked successfully
+     */
+    200: unknown;
+};
+
+export type GetResourceRepositoriesCheckNameData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The repository name to validate
+         */
+        name: string;
+        /**
+         * The namespace_id to check name validity of repository
+         */
+        namespace_id: string;
+    };
+    url: '/resource/repositories/check-name';
+};
+
+export type GetResourceRepositoriesCheckNameErrors = {
+    /**
+     * Name does not match the required regex pattern
+     */
+    400: ErrorResponse;
+    /**
+     * Internal server error.
+     */
+    500: ErrorResponse;
+};
+
+export type GetResourceRepositoriesCheckNameError = GetResourceRepositoriesCheckNameErrors[keyof GetResourceRepositoriesCheckNameErrors];
+
+export type GetResourceRepositoriesCheckNameResponses = {
+    /**
+     * Check performed successfully
+     */
+    200: {
+        /**
+         * True if the name is not taken and is valid.
+         */
+        available?: boolean;
+    };
+};
+
+export type GetResourceRepositoriesCheckNameResponse = GetResourceRepositoriesCheckNameResponses[keyof GetResourceRepositoriesCheckNameResponses];
